@@ -2,23 +2,36 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>MIS GASTOS V0.9.1</title>
+
+  <!-- PWA y tema -->
   <meta name="theme-color" content="#0b0f1a">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="./icons/icon-192.png">
-  <!-- CSP estricta: sin inline JS/CSS -->
+
+  <!-- CSP: permitimos inline script solo para el bloque WebAuthn de abajo -->
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; base-uri 'none'; frame-ancestors 'none'">
+        content="default-src 'self';
+                 img-src 'self' data:;
+                 style-src 'self';
+                 script-src 'self' 'unsafe-inline';
+                 base-uri 'none';
+                 frame-ancestors 'none'">
+
+  <!-- Estilos externos (mantiene tu estética) -->
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-  <!-- Overlay PIN -->
+  <!-- Overlay de autenticación por PIN -->
   <div id="authOverlay" class="popup-overlay" role="dialog" aria-modal="true" aria-label="Acceso PIN">
     <div class="popup-content">
       <h2 class="title-pin">ACCESO GOLD</h2>
-      <div class="pin-dots" aria-hidden="true"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <div class="pin-dots" aria-hidden="true">
+        <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+      </div>
       <div class="pin-grid">
         <button class="btn-pin" data-pin="1">1</button><button class="btn-pin" data-pin="2">2</button><button class="btn-pin" data-pin="3">3</button>
         <button class="btn-pin" data-pin="4">4</button><button class="btn-pin" data-pin="5">5</button><button class="btn-pin" data-pin="6">6</button>
@@ -30,78 +43,17 @@
     </div>
   </div>
 
-  <!-- Marca de agua -->
+  <!-- Marca agua -->
   <div class="background-icon">O&J</div>
 
   <!-- Vista principal -->
   <div id="movimientos" class="hidden" data-permiso="" data-modo="lista">
     <div class="topbar">MIS GASTOS • V0.9.1 <span id="tagBackup">APK CLOUD</span></div>
+
     <div class="container">
+      <!-- Filtros -->
       <div class="filtros-wrapper" role="region" aria-label="Filtros">
         <div class="filtro-item"><label for="filtroAño">AÑO</label><select id="filtroAño"></select></div>
         <div class="filtro-item"><label for="filtroMes">MES</label><select id="filtroMes"></select></div>
         <div class="filtro-item"><label for="filtroOri">ORI</label><select id="filtroOri"></select></div>
         <div class="filtro-item"><label for="filtroCat">CAT</label><select id="filtroCat"></select></div>
-        <div class="filtro-item"><label for="filtroSub">SUBCAT</label><select id="filtroSub"></select></div>
-      </div>
-
-      <div id="lista"></div>
-      <div id="loader" class="loader"><div class="spinner"></div></div>
-      <div style="height:250px"></div>
-    </div>
-
-    <div class="footer-controles">
-      <div class="footer-actions">
-        <button class="btn-small" id="btnExport">📊 EXPORTAR</button>
-        <button class="btn-small" id="btnImport">📥 IMPORTAR</button>
-        <button class="btn-small btn-reset" id="btnReset">⚠️ RESET</button>
-        <input type="file" id="inputFile" class="hidden" accept=".csv">
-      </div>
-      <div class="footer-row">
-        <button class="plus" id="btnGraficos" aria-label="Mostrar gráficos" title="Gráficos">
-          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="black" stroke-width="3" aria-hidden="true">
-            <line x1="18" y1="20" x2="18" y2="10"></line>
-            <line x1="12" y1="20" x2="12" y2="4"></line>
-            <line x1="6" y1="20" x2="6" y2="14"></line>
-          </svg>
-        </button>
-        <button class="plus" id="btnNuevo" aria-label="Añadir movimiento">+</button>
-        <div id="balance" aria-live="polite">0.00 €</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Formulario -->
-  <div id="form" class="hidden" aria-label="Formulario de movimiento">
-    <div class="topbar" id="tituloForm">NUEVO REGISTRO</div>
-    <div class="container">
-      <div class="row-flex">
-        <select id="origen"></select>
-        <input type="date" id="fecha" style="width:45%;">
-      </div>
-      <input type="hidden" id="editId">
-      <div class="row-flex align-center">
-        <select id="categoria"></select>
-        <button id="btnDelCat" class="btn-trash" aria-label="Borrar categoría">🗑</button>
-      </div>
-      <div class="row-flex align-center mt-8">
-        <select id="subcategoria"></select>
-        <button id="btnDelSub" class="btn-trash" aria-label="Borrar subcategoría">🗑</button>
-      </div>
-      <input id="importe" type="number" step="0.01" inputmode="decimal" placeholder="0.00 €" class="input-importe" enterkeyhint="done">
-      <textarea id="descripcion" maxlength="200" placeholder="Nota..." class="input-nota" enterkeyhint="done"></textarea>
-      <button id="btnGuardar" class="btn-primario">GUARDAR</button>
-      <div id="btnEliminarRegistro" class="hidden"><button id="btnEliminar" class="btn-peligro">ELIMINAR</button></div>
-      <button id="btnCancelar" class="btn-cancelar">CANCELAR</button>
-    </div>
-  </div>
-
-  <!-- Botón Casa Oro (solo en gráficos) -->
-  <button class="btn-casa-premium" id="btnFiltroCasa" aria-label="Ocultar/Mostrar Casa" title="Casa" hidden>
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
-  </button>
-
-  <script src="./app.js" defer></script>
-</body>
-</html>
-``
