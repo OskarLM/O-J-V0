@@ -1,31 +1,32 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <meta name="viewport"
-        content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+        content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <title>MIS GASTOS V0.9.1</title>
 
-  <!-- PWA y tema -->
-  <meta name="theme-color" content="#0b0f1a">
-  <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="icon" href="./icons/icon-192.png" sizes="192x192">
-  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <!-- PWA -->
+  <meta name="theme-color" content="#0b0f1a" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./icons/icon-192.png" sizes="192x192" />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
 
-  <!-- CSP: permitimos inline script solo para el bloque WebAuthn de abajo -->
+  <!-- CSP: sin frame-ancestors (Chrome lo ignora en <meta>), y permitimos inline para el bootstrap/WebAuthn -->
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self';
-                 img-src 'self' data:;
-                 style-src 'self';
-                 script-src 'self' 'unsafe-inline';
-                 base-uri 'none';
-                 frame-ancestors 'none'">
+        content="
+          default-src 'self';
+          img-src 'self' data:;
+          style-src 'self';
+          script-src 'self' 'unsafe-inline';
+          base-uri 'none';
+        " />
 
-  <!-- Estilos externos (mantiene tu estética) -->
-  <link rel="stylesheet" href="./styles.css">
+  <!-- Estilos (la misma estética de tu app) -->
+  <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <!-- Overlay de autenticación por PIN -->
+  <!-- Overlay PIN -->
   <div id="authOverlay" class="popup-overlay" role="dialog" aria-modal="true" aria-label="Acceso PIN">
     <div class="popup-content">
       <h2 class="title-pin">ACCESO GOLD</h2>
@@ -43,7 +44,7 @@
     </div>
   </div>
 
-  <!-- Marca agua -->
+  <!-- Marca de agua -->
   <div class="background-icon">O&J</div>
 
   <!-- Vista principal -->
@@ -57,3 +58,209 @@
         <div class="filtro-item"><label for="filtroMes">MES</label><select id="filtroMes"></select></div>
         <div class="filtro-item"><label for="filtroOri">ORI</label><select id="filtroOri"></select></div>
         <div class="filtro-item"><label for="filtroCat">CAT</label><select id="filtroCat"></select></div>
+        <div class="filtro-item"><label for="filtroSub">SUBCAT</label><select id="filtroSub"></select></div>
+      </div>
+
+      <!-- Lista / Gráficos -->
+      <div id="lista"></div>
+      <div id="loader" class="loader"><div class="spinner"></div></div>
+      <div style="height:250px"></div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer-controles">
+      <div class="footer-actions">
+        <button class="btn-small" id="btnExport">📊 EXPORTAR</button>
+        <button class="btn-small" id="btnImport">📥 IMPORTAR</button>
+        <button class="btn-small btn-reset" id="btnReset">⚠️ RESET</button>
+        <input type="file" id="inputFile" class="hidden" accept=".csv" />
+      </div>
+
+      <div class="footer-row">
+        <button class="plus" id="btnGraficos" aria-label="Mostrar gráficos" title="Gráficos">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="black" stroke-width="3" aria-hidden="true">
+            <line x1="18" y1="20" x2="18" y2="10"></line>
+            <line x1="12" y1="20" x2="12" y2="4"></line>
+            <line x1="6" y1="20" x2="6" y2="14"></line>
+          </svg>
+        </button>
+        <button class="plus" id="btnNuevo" aria-label="Añadir movimiento">+</button>
+        <div id="balance" aria-live="polite">0.00 €</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Formulario -->
+  <div id="form" class="hidden" aria-label="Formulario de movimiento">
+    <div class="topbar" id="tituloForm">NUEVO REGISTRO</div>
+    <div class="container">
+      <div class="row-flex">
+        <select id="origen"></select>
+        <input type="date" id="fecha" style="width:45%;" />
+      </div>
+      <input type="hidden" id="editId" />
+      <div class="row-flex align-center">
+        <select id="categoria"></select>
+        <button id="btnDelCat" class="btn-trash" aria-label="Borrar categoría">🗑</button>
+      </div>
+      <div class="row-flex align-center mt-8">
+        <select id="subcategoria"></select>
+        <button id="btnDelSub" class="btn-trash" aria-label="Borrar subcategoría">🗑</button>
+      </div>
+      <input id="importe" type="number" step="0.01" inputmode="decimal"
+             placeholder="0.00 €" class="input-importe" enterkeyhint="done" />
+      <textarea id="descripcion" maxlength="200" placeholder="Nota..."
+                class="input-nota" enterkeyhint="done"></textarea>
+      <button id="btnGuardar" class="btn-primario">GUARDAR</button>
+      <div id="btnEliminarRegistro" class="hidden">
+        <button id="btnEliminar" class="btn-peligro">ELIMINAR</button>
+      </div>
+      <button id="btnCancelar" class="btn-cancelar">CANCELAR</button>
+    </div>
+  </div>
+
+  <!-- Botón Casa Oro -->
+  <button class="btn-casa-premium" id="btnFiltroCasa" aria-label="Ocultar/Mostrar Casa" title="Casa" hidden>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+  </button>
+
+  <!-- Tu lógica principal -->
+  <script defer src="./app.js"></script>
+
+  <!-- WebAuthn (biometría) + Bootstrap de PIN / Health check -->
+  <script>
+    (function () {
+      /* ---------- utilidades base64url <-> ArrayBuffer ---------- */
+      const buf2b64url = (buf) => {
+        const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+        return b64.replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+      };
+      const b64url2buf = (b64url) => {
+        const pad  = '='.repeat((4 - (b64url.length % 4 || 4)) % 4);
+        const b64  = (b64url.replace(/-/g,'+').replace(/_/g,'/') + pad);
+        const str  = atob(b64);
+        const bytes = new Uint8Array(str.length);
+        for (let i=0;i<str.length;i++) bytes[i] = str.charCodeAt(i);
+        return bytes.buffer;
+      };
+      const randomChallenge = (len=32) => {
+        const bytes = new Uint8Array(len);
+        crypto.getRandomValues(bytes);
+        return bytes.buffer;
+      };
+
+      /* ---------- WebAuthn: registro y autenticación locales ---------- */
+      async function registerBiometrics() {
+        if (!window.isSecureContext || !('credentials' in navigator)) {
+          alert('Tu navegador no soporta WebAuthn en este contexto.');
+          return;
+        }
+        try {
+          const userId = new Uint8Array(16);
+          crypto.getRandomValues(userId);
+          const publicKey = {
+            challenge: randomChallenge(),
+            rp: { name: 'Mis Gastos' },
+            user: { id: userId, name: 'pixel9', displayName: 'Pixel 9' },
+            pubKeyCredParams: [
+              { type: 'public-key', alg: -7 },
+              { type: 'public-key', alg: -257 }
+            ],
+            authenticatorSelection: {
+              authenticatorAttachment: 'platform',
+              userVerification: 'required'
+            },
+            timeout: 60000,
+            attestation: 'none'
+          };
+          const cred = await navigator.credentials.create({ publicKey });
+          const credId = buf2b64url(cred.rawId);
+          localStorage.setItem('webauthnCredId', credId);
+          alert('Biometría registrada. Desde ahora puedes usar huella.');
+        } catch (e) {
+          console.error(e);
+          alert('No se pudo registrar la biometría.');
+        }
+      }
+
+      async function authenticateBiometrics() {
+        if (!window.isSecureContext || !('credentials' in navigator)) {
+          alert('WebAuthn no disponible.');
+          return;
+        }
+        const credId = localStorage.getItem('webauthnCredId');
+        if (!credId) {
+          await registerBiometrics();
+          return;
+        }
+        try {
+          const publicKey = {
+            challenge: randomChallenge(),
+            allowCredentials: [{
+              id: b64url2buf(credId),
+              type: 'public-key',
+              transports: ['internal']
+            }],
+            userVerification: 'required',
+            timeout: 60000
+          };
+          await navigator.credentials.get({ publicKey });
+          sessionStorage.setItem('webauthnLastAuth', String(Date.now()));
+          // Usa la función de tu app.js para entrar
+          if (typeof unlock === 'function') unlock();
+        } catch (e) {
+          console.error(e);
+          alert('Biometría cancelada o no válida. Usa el PIN.');
+        }
+      }
+
+      // Exponer para sobrescribir la función placeholder de app.js si existiera
+      window.biometricAuth = authenticateBiometrics;
+
+      /* ---------- Bootstrap/health-check del PIN y app.js ---------- */
+      window.addEventListener('DOMContentLoaded', () => {
+        const overlay = document.getElementById('authOverlay');
+        // fuerza visible el overlay por si algún estilo lo ocultó
+        overlay.style.display = 'flex';
+
+        // 1) Verificar que app.js realmente cargó
+        const ok = (typeof window.pressPin === 'function') &&
+                   (typeof window.clearPin === 'function') &&
+                   (typeof window.ensurePin === 'function') &&
+                   (typeof window.unlock === 'function');
+
+        if (!ok) {
+          console.error('app.js no se está cargando o las funciones no están disponibles.');
+          alert('No se está cargando app.js. Revisa que ./app.js exista en la raíz y que el <script defer src="./app.js"> esté correcto.');
+          return; // sin app.js no podemos seguir
+        }
+
+        // 2) Disparar creación de PIN en el primer toque del keypad (gesto del usuario)
+        let pinBoot = false;
+        document.querySelectorAll('.btn-pin[data-pin]').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            if (!pinBoot) {
+              pinBoot = true;
+              try {
+                if (!localStorage.getItem('pinHash')) {
+                  await ensurePin();  // definido en app.js
+                }
+                if (typeof clearPin === 'function') clearPin();
+              } catch (err) {
+                console.error('Error inicializando PIN:', err);
+              }
+            }
+          }, { passive: true });
+        });
+
+        // 3) Enlazar botón 🧬 a biometría (registro/entrada)
+        const btnBio = document.getElementById('btnBiometric');
+        if (btnBio) btnBio.addEventListener('click', (e) => {
+          e.preventDefault();
+          authenticateBiometrics();
+        }, { passive: false });
+      });
+    })();
+  </script>
+</body>
+</html>
