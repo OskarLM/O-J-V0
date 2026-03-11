@@ -1,7 +1,7 @@
 // sw.js — MIS GASTOS (GitHub Pages)
 const CACHE_VERSION = "v1.0.1";
 const CACHE_NAME = `mis-gastos-${CACHE_VERSION}`;
-const BASE = "/APK-control-de-gastos/";
+const BASE = "/APK_V0.0/";
 
 const ASSETS = [
   BASE,
