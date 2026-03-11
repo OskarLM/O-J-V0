@@ -434,7 +434,10 @@ window.onscroll = () => {
 
 <script>
 /* ==========================
-   CSV: EXPORTACIÓN (filas → columnas) ; coma decimal
+   CSV: EXPORTACIÓN EN COLUMNAS (por celdas)
+   - Cada línea del CSV corresponde a una "columna lógica" de tu app.
+   - Separador: ';'
+   - Decimales: coma europea
 ========================== */
 const exportarCSV = () => {
   if (!movimientos || movimientos.length === 0) {
@@ -442,47 +445,57 @@ const exportarCSV = () => {
     return;
   }
 
-  // Cabecera estándar
-  const out = ["Fecha;Origen;Categoria;Subcategoria;Importe;Descripcion"];
+  // Cabeceras por columna
+  const colFecha       = ["Fecha"];
+  const colOrigen      = ["Origen"];
+  const colCategoria   = ["Categoria"];
+  const colSubcategoria= ["Subcategoria"];
+  const colImporte     = ["Importe"];
+  const colDescripcion = ["Descripcion"];
 
+  // Relleno de cada "columna"
   movimientos.forEach(m => {
-    // Fecha ISO (yyyy-mm-dd) → dd/mm/yyyy
     const [y, mo, d] = (m.f || "").split("-");
     const fechaES = (y && mo && d) ? `${d}/${mo}/${y}` : (m.f || "");
 
-    // Importe con coma decimal
-    let impStr = (typeof m.imp === "number" ? m.imp : parseFloat(m.imp || 0)).toString();
-    impStr = impStr.replace(".", ","); // 1234.56 -> 1234,56
+    // Importe a coma europea
+    const impStr = (typeof m.imp === "number" ? m.imp : parseFloat(m.imp || 0))
+                    .toString()
+                    .replace(".", ",");
 
-    // Descripción: entrecomillada + comillas internas escapadas
-    const desc = (m.d ?? "").toString().replace(/"/g, '""'); // -> duplica comillas
-    const descCsv = `"${desc}"`;
+    // Descripción saneada de comillas múltiples
+    const desc = (m.d || "").replace(/\"+/g, '"').trim();
 
-    // Construir fila
-    out.push([
-      fechaES,
-      m.o ?? "",
-      m.c ?? "",
-      m.s ?? "",
-      impStr,
-      descCsv
-    ].join(";"));
+    colFecha.push(fechaES);
+    colOrigen.push(m.o || "");
+    colCategoria.push(m.c || "");
+    colSubcategoria.push(m.s || "");
+    colImporte.push(impStr);
+    colDescripcion.push(desc);
   });
 
-  const csv = out.join("\n");
+  // Construcción del CSV "por columnas"
+  // Cada array (col...) se une en una línea separada por ';'
+  const csv =
+    colFecha.join(";")       + "\n" +
+    colOrigen.join(";")      + "\n" +
+    colCategoria.join(";")   + "\n" +
+    colSubcategoria.join(";")+ "\n" +
+    colImporte.join(";")     + "\n" +
+    colDescripcion.join(";");
+
+  // Descarga
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url  = URL.createObjectURL(blob);
-
-  const a = document.createElement("a");
+  const a    = document.createElement("a");
   a.href = url;
-  a.download = "gastos_exportados.csv";
+  a.download = "mis_gastos_columnas.csv";
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 };
 </script>
-
 
   
 /* ==========================
