@@ -14,9 +14,8 @@
   <meta name="theme-color" content="#d4af37" />
   <link rel="manifest" href="./manifest.json" />
 
-  <!-- Icono Apple (SVG inline original) -->
-  <link rel="apple-touch-icon"
-        href="data:image/svg+xml,<svg xmlns='http://www.w3.org' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230b0f1a'/><circle cx='50' cy='50' r='40' fill='none' stroke='%23d4af37' stroke-width='4'/><text x='50%25' y='55%25' dominant-baseline='middle' text-anchor='middle' font-family='serif' font-weight='bold' font-size='35' fill='%23d4af37'>O%26J</text></svg>" />
+  <!-- Icono Apple (SVG inline) -->
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230b0f1a'/><circle cx='50' cy='50' r='40' fill='none' stroke='%23d4af37' stroke-width='4'/><text x='50%25' y='55%25' dominant-baseline='middle' text-anchor='middle' font-family='serif' font-weight='bold' font-size='35' fill='%23d4af37'>O%26J</text></svg>" />
 
   <style>
     :root {
@@ -162,7 +161,7 @@
   <div class="background-icon">O&J</div>
 
   <div id="movimientos" class="hidden">
-    <div class="topbar">MIS GASTOS • V0.0 <span id="tagBackup">APK CLOUD</span></div>
+    <div class="topbar">MIS GASTOS • V0.9.1 <span id="tagBackup">APK CLOUD</span></div>
 
     <div class="container">
       <div class="filtros-wrapper">
@@ -248,6 +247,10 @@ const catBase = ["Casa","Caravana","Coche","Compras","Efectivo","Escolar","Garaj
       mesesLabel = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"],
       origenBase = ["Ingreso","Gasto","Nómina"];
 
+// Reglas Nómina
+const NOMINA_CATS = ["Oskar", "Josune"];
+const NOMINA_SUBS = [...mesesLabel];
+
 let movimientos  = JSON.parse(localStorage.getItem('movimientos')) || [],
     catExtra     = JSON.parse(localStorage.getItem('categoriaExtra')) || [],
     subMaestra  = JSON.parse(localStorage.getItem('subMaestra_v2')) || subBase.slice(),
@@ -256,7 +259,7 @@ let movimientos  = JSON.parse(localStorage.getItem('movimientos')) || [],
     filtradosGlobal = [],
     pinActual = "";
 
-const PIN_OK = "7143"; // Nota: sigue en claro; ver sección de seguridad avanzada más abajo
+const PIN_OK = "7143"; // Nota: sigue en claro; ver seguridad avanzada si necesitas reforzarlo
 
 /* ==========================
   SEGURIDAD
@@ -278,7 +281,7 @@ const unlock    = () => {
   m.dataset.permiso = "OK";
   init();
 };
-// Mantengo tu bypass en 'file:' para desarrollo local, pero ahora está claro y sin cortes.
+// Bypass para entorno local file: (mantener solo para desarrollo)
 const biometricAuth = async () => {
   if (window.isSecureContext || window.location.protocol === 'file:') unlock();
   else alert("Requiere HTTPS");
@@ -308,7 +311,6 @@ const mostrar = () => {
 
   filtradosGlobal.forEach(m => t += m.imp);
 
-  // Umbrales por mes / año
   const factor = (fs[0] === "TODOS") ? 12 : 1;
   const bD = document.getElementById("balance");
   bD.innerText = t.toFixed(2) + " €";
@@ -320,7 +322,7 @@ const mostrar = () => {
   if (movDiv.dataset.modo === "graficos") {
     renderizarBarrasGraficos(factor);
   } else {
-    // Mitigación XSS: escapamos la descripción antes de inyectar
+    // Mitigación XSS: escapamos descripción
     const esc = s => String(s).replace(/[&<>"']/g, c =>
       ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;', "'":'&#39;'}[c]));
 
@@ -380,44 +382,95 @@ const renderizarBarrasGraficos = (f) => {
 /* ==========================
   FORMULARIO Y LÓGICA CRUD
 ========================== */
+const llenar = (id, base, extra, pre = "", opts = {}) => {
+  const s = document.getElementById(id);
+  const origenActual = opts.origenActual || "";
+
+  // Opción por defecto
+  s.innerHTML = `<option value="" disabled ${pre === "" ? 'selected' : ''}>Seleccionar...</option>`;
+
+  // Consolidar y filtrar según reglas
+  let values = [...new Set([...base, ...extra])];
+
+  // 1) Categoría: ocultar Oskar/Josune salvo en Nómina
+  if (id === "categoria") {
+    const ocultarNominaCats = origenActual !== "Nómina";
+    if (ocultarNominaCats) {
+      values = values.filter(v => !NOMINA_CATS.includes(v));
+    }
+  }
+
+  // 2) Subcategoría: ocultar meses salvo en Nómina
+  if (id === "subcategoria") {
+    const ocultarMeses = origenActual !== "Nómina";
+    if (ocultarMeses) {
+      values = values.filter(v => !NOMINA_SUBS.includes(v));
+    }
+  }
+
+  // Pintar opciones visibles
+  values.sort((a,b) => a.localeCompare(b, 'es')).forEach(v => {
+    s.innerHTML += `<option value="${v}" ${v === pre ? 'selected' : ''}>${v}</option>`;
+  });
+
+  // Si el valor preseleccionado estaba fuera (p.ej., edición de un Nómina),
+  // lo dejamos seleccionado pero oculto en el desplegable
+  if (pre && !values.includes(pre)) {
+    s.innerHTML += `<option value="${pre}" selected hidden>${pre}</option>`;
+  }
+
+  // Botón “+ Añadir nuevo...”
+  if (id !== "origen") s.innerHTML += `<option value="+">+ Añadir nuevo...</option>`;
+};
+
 const abrirFormulario = (id = null) => {
-  const f = document.getElementById("form"),
-        mDiv = document.getElementById("movimientos"),
-        btnD = document.getElementById("btnEliminarRegistro");
+  const f   = document.getElementById("form"),
+        mDiv= document.getElementById("movimientos"),
+        btnD= document.getElementById("btnEliminarRegistro");
 
   if (id) {
     let m = movimientos.find(x => x.id.toString() === id.toString());
     document.getElementById("editId").value = m.id;
-    document.getElementById("fecha").value = m.f;
+    document.getElementById("fecha").value  = m.f;
 
     llenar("origen", origenBase, [], m.o);
 
-    if (["Oskar","Josune"].includes(m.c)) {
-      llenar("categoria", catBase, catExtra);
+    // Categoría
+    if (NOMINA_CATS.includes(m.c)) {
+      // Edición de nómina: mantenemos el valor seleccionado como única opción visible
+      llenar("categoria", catBase, catExtra); // base limpia
       document.getElementById("categoria").innerHTML += `<option value="${m.c}" selected>${m.c}</option>`;
     } else {
-      llenar("categoria", catBase, catExtra, m.c);
+      // No nómina: filtrar Oskar/Josune
+      llenar("categoria", catBase, catExtra, m.c, { origenActual: m.o });
     }
 
+    // Subcategoría
     if (m.o === "Nómina") {
+      // Para nómina solo mes seleccionado
       document.getElementById("subcategoria").innerHTML = `<option value="${m.s}" selected>${m.s}</option>`;
     } else {
-      llenar("subcategoria", subMaestra, [], m.s);
+      // No nómina: ocultar meses
+      llenar("subcategoria", subMaestra, [], m.s, { origenActual: m.o });
     }
 
-    document.getElementById("importe").value = Math.abs(m.imp);
+    document.getElementById("importe").value     = Math.abs(m.imp);
     document.getElementById("descripcion").value = m.d || "";
-
     btnD.classList.remove("hidden");
+
   } else {
-    document.getElementById("editId").value = "";
-    document.getElementById("importe").value = "";
+    // Nuevo
+    document.getElementById("editId").value      = "";
+    document.getElementById("importe").value     = "";
     document.getElementById("descripcion").value = "";
-    document.getElementById("fecha").value = new Date().toISOString().split("T")[0];
+    document.getElementById("fecha").value       = new Date().toISOString().split("T")[0];
 
     llenar("origen", origenBase, []);
-    llenar("categoria", catBase, catExtra);
-    llenar("subcategoria", subMaestra, []);
+
+    const oSel = document.getElementById("origen").value || "";
+    // Por defecto (no nómina) ocultamos Oskar/Josune y meses
+    llenar("categoria",   catBase,   catExtra, "", { origenActual: oSel });
+    llenar("subcategoria", subMaestra, [],     "", { origenActual: oSel });
 
     btnD.classList.add("hidden");
   }
@@ -462,29 +515,43 @@ const volver = () => {
   mostrar();
 };
 
-const llenar = (id, base, extra, pre = "") => {
-  const s = document.getElementById(id);
-  s.innerHTML = `<option value="" disabled ${pre === "" ? 'selected' : ''}>Seleccionar...</option>`;
-  [...new Set([...base, ...extra])].sort((a,b) => a.localeCompare(b, 'es')).forEach(v => {
-    s.innerHTML += `<option value="${v}" ${v === pre ? 'selected' : ''}>${v}</option>`;
-  });
-  if (id !== "origen") s.innerHTML += `<option value="+">+ Añadir nuevo...</option>`;
-};
-
+// BLOQUEO de creación manual de “Oskar/Josune” en Categoría,
+// y resto de comportamientos +/añadir
 const manejarNuevo = (el, tipo) => {
   if (el.value === "+") {
     let n = prompt(`Nueva ${tipo}:`);
-    if (n) {
-      n = n.trim().charAt(0).toUpperCase() + n.trim().slice(1).toLowerCase();
-      if (tipo === "categoria") {
+    if (!n) { el.value = ""; return; }
+
+    // Normalizar
+    n = n.trim();
+    const nLower = n.toLowerCase();
+    n = n.charAt(0).toUpperCase() + n.slice(1).toLowerCase();
+
+    if (tipo === "categoria") {
+      // Bloqueo específico
+      if (["oskar","josune"].includes(nLower)) {
+        alert("No puedes crear manualmente 'Oskar' ni 'Josune'. Selecciona 'Nómina' y usa el popup.");
+        el.value = "";
+        return;
+      }
+      // Añadir al extra si no existe
+      if (!catExtra.includes(n) && !catBase.includes(n)) {
         catExtra.push(n);
         localStorage.setItem('categoriaExtra', JSON.stringify(catExtra));
-      } else {
+      }
+      // Rellenar respetando reglas del origen actual
+      const origenActual = document.getElementById("origen").value || "";
+      llenar("categoria", catBase, catExtra, n, { origenActual });
+
+    } else {
+      // subcategoria
+      if (!subMaestra.includes(n)) {
         subMaestra.push(n);
         localStorage.setItem('subMaestra_v2', JSON.stringify(subMaestra));
       }
-      llenar(tipo, tipo === "categoria" ? catBase : subMaestra, tipo === "categoria" ? catExtra : [], n);
-    } else el.value = "";
+      const origenActual = document.getElementById("origen").value || "";
+      llenar("subcategoria", subMaestra, [], n, { origenActual });
+    }
   }
 };
 
@@ -498,7 +565,8 @@ const borrarElemento = (tipo) => {
     if (idx >= 0) {
       catExtra.splice(idx,1);
       localStorage.setItem('categoriaExtra', JSON.stringify(catExtra));
-      llenar('categoria', catBase, catExtra);
+      const origenActual = document.getElementById("origen").value || "";
+      llenar('categoria', catBase, catExtra, "", { origenActual });
     } else {
       alert('Solo puedes borrar categorías añadidas por ti.');
     }
@@ -507,7 +575,8 @@ const borrarElemento = (tipo) => {
     if (idx >= 0) {
       subMaestra.splice(idx,1);
       localStorage.setItem('subMaestra_v2', JSON.stringify(subMaestra));
-      llenar('subcategoria', subMaestra, []);
+      const origenActual = document.getElementById("origen").value || "";
+      llenar('subcategoria', subMaestra, [], "", { origenActual });
     }
   }
 };
@@ -526,10 +595,10 @@ const actualizarListas = () => {
         fO = document.getElementById("filtroOri");
 
   fC.innerHTML = '<option value="TODAS">Cat: TODAS</option>';
-  [...new Set([...catBase, ...catExtra])].sort().forEach(c => fC.add(new Option(c, c)));
+  [...new Set([...catBase, ...catExtra, ...NOMINA_CATS])].sort().forEach(c => fC.add(new Option(c, c)));
 
   fS.innerHTML = '<option value="TODAS">Sub: TODAS</option>';
-  [...new Set(subMaestra)].sort().forEach(s => fS.add(new Option(s, s)));
+  [...new Set([...subMaestra, ...NOMINA_SUBS])].sort().forEach(s => fS.add(new Option(s, s)));
 
   fO.innerHTML = '<option value="TODOS">Ori: TODOS</option>';
   origenBase.forEach(o => fO.add(new Option(o, o)));
@@ -567,12 +636,13 @@ window.onscroll = () => {
 
 <script>
 /**
- * EXPORTACIÓN “POR FILAS”
- * - 1ª fila: cabeceras
- * - Cada movimiento: una fila
- * - Delimitador: ';'
+ * EXPORTACIÓN “POR FILAS” EN TSV (TAB-SEPARATED)
+ * - Fila 1: encabezados (Fecha, Origen, Categoria, Subcategoria, Importe, Descripcion)
+ * - Desde fila 2: un movimiento por fila
+ * - Separador: TAB (\t)
  * - Decimales: coma europea
- * - Fechas: dd/mm/yyyy (para máxima compatibilidad con Excel ES)
+ * - Fecha: dd/mm/yyyy
+ * - Descripción: mantiene comillas " tal cual; evita tabs/saltos que rompan columnas
  */
 const exportarCSV = () => {
   if (!movimientos || movimientos.length === 0) {
@@ -580,63 +650,63 @@ const exportarCSV = () => {
     return;
   }
 
-  // Utilidad: escapar campos CSV según RFC4180 (doblar comillas y encerrar si hace falta)
-  const csvEscape = (v) => {
-    const s = (v ?? "").toString();
-    const needsQuotes = /[;\n",]/.test(s);          // contiene separadores, comillas o saltos
-    const doubled     = s.replace(/"/g, '""');      // "" para comillas internas
-    return needsQuotes ? `"${doubled}"` : doubled;
-  };
+  const SEP = "\t"; // TAB
 
-  // Utilidad: fecha ISO -> dd/mm/yyyy
+  // Fecha ISO -> dd/mm/yyyy
   const toESDate = (iso) => {
     const [y, m, d] = (iso || "").split("-");
     if (!y || !m || !d) return iso || "";
     return `${d}/${m}/${y}`;
   };
 
-  // Utilidad: número -> coma europea
+  // Número -> coma europea
   const toEuro = (n) => {
     const val = (typeof n === "number" ? n : parseFloat(n || 0));
-    // Convertimos a string con punto y luego cambiamos el último punto por coma
-    // (evita romper miles si alguna vez se formatean)
     const s = Number.isFinite(val) ? val.toString() : "0";
-    // Si no lleva decimales, devolvemos tal cual
-    if (!s.includes(".")) return s;
-    // Cambiar el punto decimal por coma
-    return s.replace(".", ",");
+    return s.includes(".") ? s.replace(".", ",") : s;
   };
 
-  // Cabeceras (coinciden con las que tu importador reconoce)
-  const headers = ["Fecha","Origen","Categoria","Subcategoria","Importe","Descripcion"];
+  // Normalizar valor de celda para TSV:
+  // - Reemplazar TAB por espacio para no desalinear columnas
+  // - Convertir saltos de línea a símbolo visible (⏎) para no romper filas
+  // - Mantener comillas " exactamente como vienen (no las duplicamos)
+  const tsvCell = (v) => {
+    return (v ?? "")
+      .toString()
+      .replace(/\t/g, " ")      // evita romper columnas
+      .replace(/\r?\n/g, "⏎");  // evita romper filas
+  };
 
-  // Construir filas
-  const rows = movimientos.map(m => ([
-    toESDate(m.f),
-    m.o || "",
-    m.c || "",
-    m.s || "",
-    toEuro(m.imp),
-    (m.d ?? "").replace(/\\"+/g, '"').trim()
-  ].map(csvEscape).join(";")));
+  // Encabezados exactos en la primera fila
+  const headers = ["Fecha","Origen","Categoria","Subcategoria","Importe","Descripcion"].join(SEP);
 
-  // Unir todo: cabeceras + filas
-  const csv = [headers.join(";"), ...rows].join("\n");
+  // Construcción de filas
+  const rows = movimientos.map(m => {
+    const fecha = toESDate(m.f);
+    const origen = m.o || "";
+    const categoria = m.c || "";
+    const subcat = m.s || "";
+    const importe = toEuro(m.imp);
+    // Conservamos comillas tal cual, pero saneamos tabs/lf
+    const desc = tsvCell((m.d ?? "").trim());
+
+    return [fecha, origen, categoria, subcat, importe, desc].join(SEP);
+  });
+
+  const tsv = [headers, ...rows].join("\n");
 
   // Descargar
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const blob = new Blob([tsv], { type: "text/tab-separated-values;charset=utf-8;" });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement("a");
   a.href = url;
-  a.download = "mis_gastos_filas.csv";
+  a.download = "mis_gastos_filas.tsv";
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 };
 </script>
-
-<script>
 /* ==========================
   CSV: IMPORTACIÓN (detecta TAB/;/, y coma decimal)
 ========================== */
@@ -651,7 +721,6 @@ const importarCSV = (e) => {
       const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
       if (!lines.length) { alert("El archivo está vacío."); return; }
 
-      // Detectar delimitador
       const header = lines[0];
       const counts = {
         tab : (header.match(/\t/g) || []).length,
@@ -663,7 +732,6 @@ const importarCSV = (e) => {
       else if (counts.semi >= counts.comma) delim = ";";
       else delim = ",";
 
-      // Parser con comillas escapadas
       const parseLine = (line) => {
         const out = [];
         let cur = "", inQ = false;
@@ -682,7 +750,6 @@ const importarCSV = (e) => {
         return out;
       };
 
-      // Índices de columnas
       const cols = parseLine(header).map(h => h.trim().toLowerCase());
       const idx = {
         fecha: cols.findIndex(c => c.startsWith("fecha")),
@@ -697,17 +764,14 @@ const importarCSV = (e) => {
       const missing = required.filter(k => idx[k] < 0);
       if (missing.length) { alert("Faltan columnas: " + missing.join(", ")); return; }
 
-      // Utils
       const toISODate = (ddmmyyyy) => {
         const m = ddmmyyyy.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-        if (!m) return ddmmyyyy; // si ya viene ISO, lo mantenemos
+        if (!m) return ddmmyyyy;
         return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
       };
       const parseEuroNumber = (s) => {
         let t = (s || '').toString().trim();
-        // quitar miles con punto: 1.234,56 -> 1234,56  (regex reparada)
         t = t.replace(/\.(?=\d{3}(?:\D|$))/g, '');
-        // coma decimal -> punto
         t = t.replace(',', '.');
         const n = parseFloat(t);
         return isNaN(n) ? 0 : n;
@@ -720,7 +784,6 @@ const importarCSV = (e) => {
       };
       const normalizeCap = (s) => s ? (s.trim().charAt(0).toUpperCase() + s.trim().slice(1)) : s;
 
-      // Recorrer filas
       const nuevos = [];
       for (let i = 1; i < lines.length; i++) {
         const arr = parseLine(lines[i]);
@@ -739,7 +802,6 @@ const importarCSV = (e) => {
         let s = normalizeCap(cleanText(rawSub));
         let d = cleanText(rawDesc);
 
-        // Normalizar origen y signo
         const oLow = o.toLowerCase();
         if (oLow.startsWith('nom')) o = 'Nómina';
         else if (oLow.startsWith('gas')) o = 'Gasto';
@@ -755,15 +817,14 @@ const importarCSV = (e) => {
         nuevos.push(mov);
       }
 
-      // Añadir categorías/subcategorías nuevas
       const nuevasCats = [];
       const nuevasSubs = [];
       nuevos.forEach(m => {
-        if (![...catBase, ...catExtra].includes(m.c)) {
+        if (![...catBase, ...catExtra, ...NOMINA_CATS].includes(m.c)) {
           if (!nuevasCats.includes(m.c)) nuevasCats.push(m.c);
           catExtra.push(m.c);
         }
-        if (!subMaestra.includes(m.s)) {
+        if (![...subMaestra, ...NOMINA_SUBS].includes(m.s)) {
           if (!nuevasSubs.includes(m.s)) nuevasSubs.push(m.s);
           subMaestra.push(m.s);
         }
@@ -771,11 +832,9 @@ const importarCSV = (e) => {
       if (nuevasCats.length) localStorage.setItem('categoriaExtra', JSON.stringify(catExtra));
       if (nuevasSubs.length) localStorage.setItem('subMaestra_v2', JSON.stringify(subMaestra));
 
-      // Insertar y persistir
       movimientos = [...movimientos, ...nuevos].sort((a,b) => new Date(b.f) - new Date(a.f));
       localStorage.setItem('movimientos', JSON.stringify(movimientos));
 
-      // Refrescar UI
       actualizarListas();
       resetPagina();
       mostrar();
@@ -852,22 +911,16 @@ document.head.appendChild(estiloPlata);
     document.getElementById('confirm_premium').onclick = () => {
       let n = document.getElementById('val_premium').value.trim();
       if (n) {
-        n = n.charAt(0).toUpperCase() + n.slice(1).toLowerCase();
-        if (tipo === "categoria") {
-          if (!catExtra.includes(n) && !catBase.includes(n)) {
-            catExtra.push(n);
-            localStorage.setItem('categoriaExtra', JSON.stringify(catExtra));
-          }
-        } else {
-          if (!subMaestra.includes(n)) {
-            subMaestra.push(n);
-            localStorage.setItem('subMaestra_v2', JSON.stringify(subMaestra));
-          }
-        }
-        llenar(tipo, tipo === "categoria" ? catBase : subMaestra,
-               tipo === "categoria" ? catExtra : [], n);
+        // La lógica real la maneja manejarNuevo, pero aquí permitimos atajo similar
+        const select = el;
+        select.value = "+";
+        overlay.remove();
+        // Disparamos la misma ruta que manejarNuevo haría
+        // (dejamos que manejarNuevo bloquee Oskar/Josune si procede)
+        setTimeout(() => manejarNuevo(select, select.id), 0);
+      } else {
+        overlay.remove();
       }
-      overlay.remove();
     };
     document.getElementById('cancel_premium').onclick = () => {
       el.value = "";
@@ -886,7 +939,7 @@ document.head.appendChild(estiloPlata);
 
 <script>
 /* ==========================
-  POPUP NÓMINA PREMIUM (Oskar / Josune)
+  POPUP NÓMINA (Oskar / Josune) + refresco según Origen
 ========================== */
 (function() {
   const estiloNomina = document.createElement('style');
@@ -906,7 +959,7 @@ document.head.appendChild(estiloPlata);
   .btn-cancel { background:linear-gradient(180deg, #757575, #c0c0c0, #ffffff); color:black; margin-bottom:0; }`;
   document.head.appendChild(estiloNomina);
 
-  const lanzarPopupNominaPremium = () => {
+  const lanzarPopupNomina = () => {
     const overlay = document.createElement('div');
     overlay.className = 'nomina-overlay';
     overlay.innerHTML = `
@@ -928,18 +981,28 @@ document.head.appendChild(estiloPlata);
     };
     document.getElementById('btn_cancel_nom').onclick = () => {
       document.getElementById("origen").value = "Gasto";
+      // Al volver a Gasto refrescamos selects con reglas de ocultación
+      llenar('categoria',   catBase,   catExtra, "", { origenActual: "Gasto" });
+      llenar('subcategoria', subMaestra, [],     "", { origenActual: "Gasto" });
       overlay.remove();
     };
   };
 
   document.addEventListener('change', (e) => {
-    if (e.target.id === 'origen' && e.target.value === "Nómina") {
-      e.stopImmediatePropagation();
-      const fVal = document.getElementById("fecha").value;
-      const mIdx = new Date(fVal + "T00:00:00").getMonth();
-      document.getElementById("subcategoria").innerHTML =
-        `<option value="${mesesLabel[mIdx]}" selected>${mesesLabel[mIdx]}</option>`;
-      lanzarPopupNominaPremium();
+    if (e.target.id === 'origen') {
+      const o = e.target.value;
+
+      if (o === "Nómina") {
+        const fVal = document.getElementById("fecha").value || new Date().toISOString().split("T")[0];
+        const mIdx = new Date(fVal + "T00:00:00").getMonth();
+        document.getElementById("subcategoria").innerHTML =
+          `<option value="${mesesLabel[mIdx]}" selected>${mesesLabel[mIdx]}</option>`;
+        lanzarPopupNomina();
+      } else {
+        // No Nómina: refrescar selects con reglas de ocultación
+        llenar('categoria',   catBase,   catExtra, "", { origenActual: o });
+        llenar('subcategoria', subMaestra, [],     "", { origenActual: o });
+      }
     }
   }, true);
 })();
@@ -1079,7 +1142,6 @@ document.head.appendChild(estiloFiltrosGrandes);
 <script>
 /* ==========================
   REGISTRO DEL SERVICE WORKER (PWA)
-  - USAR RUTA RELATIVA PARA GH Pages / subcarpetas
 ========================== */
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
