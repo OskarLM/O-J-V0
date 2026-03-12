@@ -1,9 +1,7 @@
-/* db.js - capa IndexedDB para Mi App
-   Diseño: API basada en Promesas con utilidades de import/export e índices útiles.
-*/
+/* db.js - IndexedDB con filtros y paginación (keyset) */
 
 const DB_NAME = 'app-db';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // ↑ versión
 const STORE_ITEMS = 'items';
 
 export async function initDB() {
@@ -13,14 +11,25 @@ export async function initDB() {
     open.onupgradeneeded = (event) => {
       const db = open.result;
 
-      // Crea el store si no existe
+      // v1: store e índices básicos
       if (!db.objectStoreNames.contains(STORE_ITEMS)) {
         const store = db.createObjectStore(STORE_ITEMS, { keyPath: 'id' });
-        // Índices para consultas comunes
         store.createIndex('byCreatedAt', 'createdAt', { unique: false });
         store.createIndex('byText', 'textNorm', { unique: false });
-      } else if (event.oldVersion < 1) {
-        // Migraciones futuras aquí (switch por version si crece)
+      }
+
+      // v2: índices compuestos para orden estable y paginación
+      if (event.oldVersion < 2) {
+        const tx = open.transaction;
+        const store = tx.objectStore(STORE_ITEMS);
+        // Orden estable por fecha + id
+        if (!store.indexNames.contains('byCreatedAtId')) {
+          store.createIndex('byCreatedAtId', ['createdAt', 'id'], { unique: false });
+        }
+        // Búsqueda por prefijo + id (orden estable dentro del prefijo)
+        if (!store.indexNames.contains('byTextId')) {
+          store.createIndex('byTextId', ['textNorm', 'id'], { unique: false });
+        }
       }
     };
 
@@ -31,7 +40,6 @@ export async function initDB() {
   });
 }
 
-// Utilidad transaccional
 async function withStore(mode, fn) {
   const db = await initDB();
   return new Promise((resolve, reject) => {
@@ -39,18 +47,8 @@ async function withStore(mode, fn) {
     const store = tx.objectStore(STORE_ITEMS);
 
     let settled = false;
-    const done = (v) => {
-      if (!settled) {
-        settled = true;
-        resolve(v);
-      }
-    };
-    const fail = (e) => {
-      if (!settled) {
-        settled = true;
-        reject(e);
-      }
-    };
+    const done = (v) => { if (!settled) { settled = true; resolve(v); } };
+    const fail = (e) => { if (!settled) { settled = true; reject(e); } };
 
     tx.oncomplete = () => done(undefined);
     tx.onerror = () => fail(tx.error);
@@ -60,17 +58,15 @@ async function withStore(mode, fn) {
   });
 }
 
-// Normalización básica para índice de texto
 function normalizeText(s) {
   return (s ?? '')
     .toString()
     .trim()
     .toLowerCase()
-    .normalize('NFD')                 // separa diacríticos
-    .replace(/\p{Diacritic}/gu, '');  // quita diacríticos
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '');
 }
 
-// UUID v4 simple (no-crypto para compatibilidad amplia)
 function uuid() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
     const r = (Math.random() * 16) | 0;
@@ -79,7 +75,7 @@ function uuid() {
   });
 }
 
-/* ===== Operaciones CRUD ===== */
+/* ===== CRUD ===== */
 
 export async function addItem({ text, meta } = {}) {
   const now = Date.now();
@@ -91,7 +87,6 @@ export async function addItem({ text, meta } = {}) {
     createdAt: now,
     updatedAt: now,
   };
-
   await withStore('readwrite', (store) => store.add(item));
   return item;
 }
@@ -101,23 +96,17 @@ export async function getItem(id) {
 }
 
 export async function getAllItems({ sortBy = 'createdAt', direction = 'desc' } = {}) {
-  // Lee por índice para ordenar por fecha
+  // Conservado por compatibilidad; usa queryItems para filtros/paginación
+  const indexName = sortBy === 'createdAt' ? 'byCreatedAt' : null;
   return withStore('readonly', (store) =>
     new Promise((resolve, reject) => {
-      const idxName = sortBy === 'createdAt' ? 'byCreatedAt' : null;
-      const source = idxName ? store.index(idxName) : store;
+      const source = indexName ? store.index(indexName) : store;
       const dir = direction === 'asc' ? 'next' : 'prev';
-
-      const results = [];
+      const out = [];
       const req = source.openCursor(null, dir);
       req.onsuccess = () => {
-        const cursor = req.result;
-        if (cursor) {
-          results.push(cursor.value);
-          cursor.continue();
-        } else {
-          resolve(results);
-        }
+        const c = req.result;
+        if (c) { out.push(c.value); c.continue(); } else { resolve(out); }
       };
       req.onerror = () => reject(req.error);
     })
@@ -136,7 +125,6 @@ export async function updateItem(id, patch = {}) {
     const next = {
       ...existing,
       ...patch,
-      // Mantén el índice de texto actualizado
       ...(patch.text !== undefined ? { textNorm: normalizeText(patch.text) } : {}),
       updatedAt: Date.now(),
     };
@@ -167,73 +155,53 @@ export async function countItems() {
   );
 }
 
-/* ===== Búsqueda por prefijo normalizado ===== */
-export async function findByTextPrefix(prefix) {
-  const p = normalizeText(prefix || '');
-  if (!p) return [];
+/* ===== Filtros + Paginación =====
+   - order: 'desc' (más recientes primero) o 'asc'
+   - limit: nº de elementos por página
+   - cursor: token opaco generado por queryItems (keyset)
+   - dateFrom / dateTo: milisegundos (timestamp) o Date; ambos inclusivos
+   - textPrefix: filtra por prefijo normalizado
+*/
 
-  return withStore('readonly', (store) =>
-    new Promise((resolve, reject) => {
-      const index = store.index('byText');
-      // Rango de prefijo: [p, p + \uffff]
-      const range = IDBKeyRange.bound(p, p + '\uffff');
-      const results = [];
-      const req = index.openCursor(range, 'next');
-
-      req.onsuccess = () => {
-        const cursor = req.result;
-        if (cursor) {
-          results.push(cursor.value);
-          cursor.continue();
-        } else {
-          resolve(results);
-        }
-      };
-      req.onerror = () => reject(req.error);
-    })
-  );
+function toTs(v) {
+  if (v == null) return null;
+  return v instanceof Date ? v.getTime() : Number(v);
 }
 
-/* ===== Export/Import ===== */
-
-export async function exportItems() {
-  const all = await getAllItems({ sortBy: 'createdAt', direction: 'asc' });
-  return {
-    exportedAt: new Date().toISOString(),
-    version: DB_VERSION,
-    items: all,
-  };
+function encodeCursor(obj) {
+  return btoa(JSON.stringify(obj)); // { createdAt, id, order }
+}
+function decodeCursor(token) {
+  try { return token ? JSON.parse(atob(token)) : null; }
+  catch { return null; }
 }
 
-export async function importItems(payload, { merge = true } = {}) {
-  if (!payload || !Array.isArray(payload.items)) {
-    throw new Error('Formato de import no válido');
-  }
-  const incoming = payload.items;
+export async function queryItems({
+  textPrefix = '',
+  dateFrom = null,
+  dateTo = null,
+  order = 'desc',
+  limit = 20,
+  cursor = null,
+} = {}) {
+  const prefix = normalizeText(textPrefix);
+  const from = toTs(dateFrom);
+  const to = toTs(dateTo);
+  const dir = order === 'asc' ? 'next' : 'prev';
 
-  await withStore('readwrite', async (store) => {
-    if (!merge) {
-      await new Promise((res, rej) => {
-        const r = store.clear();
-        r.onsuccess = () => res();
-        r.onerror = () => rej(r.error);
-      });
-    }
+  // Cursor previo decodificado (para continuar)
+  const cObj = decodeCursor(cursor);
 
-    for (const raw of incoming) {
-      const item = {
-        id: raw.id || uuid(),
-        text: raw.text ?? '',
-        textNorm: normalizeText(raw.text ?? ''),
-        meta: raw.meta ?? {},
-        createdAt: raw.createdAt ?? Date.now(),
-        updatedAt: Date.now(),
-      };
-      await new Promise((res, rej) => {
-        const r = store.put(item);
-        r.onsuccess = () => res();
-        r.onerror = () => rej(r.error);
-      });
-    }
-  });
-}
+  // Elegimos índice base:
+  // - Si hay prefijo sin rangos de fecha, conviene "byTextId"
+  // - Si hay fechas o no hay prefijo, usamos "byCreatedAtId"
+  const useTextIndex = !!prefix && !from && !to;
+  const indexName = useTextIndex ? 'byTextId' : 'byCreatedAtId';
+
+  // Construimos rango
+  let range = null;
+  if (useTextIndex) {
+    // Prefijo [p, p + \uffff]
+    const low = [prefix, ''];
+    const high = [prefix + '\uffff', '\uffff'];
+    if (dir === 'next') {
