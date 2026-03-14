@@ -228,7 +228,7 @@ function layoutFooterReset(btnLeft, btnCenter, btnRight){
     b.style.left = "";
     b.style.top = "";
     b.style.transform = "";
-    // No forzamos display aquí; lo gestiona cada modo
+    // display lo gestiona cada modo
     b.style.opacity = "1";
   });
 }
@@ -242,7 +242,7 @@ function layoutFooterGrafico1(container, btnLeft, btnCenter, btnRight){
   const PAD  = 20;
 
   const xLeft = PAD;                           // 0%
-  const xG2   = (W / 2) - (SIZE / 2);         // 50% (misma posición que el “+” de Movimientos)
+  const xG2   = (W / 2) - (SIZE / 2);         // 50% (misma horizontal que el “+” de Movimientos)
   const xCasa = Math.round((xLeft + xG2) / 2); // 25% (mitad exacta entre izq y G2)
 
   [btnLeft, btnCenter, btnRight].forEach(b=>{
@@ -282,6 +282,27 @@ function layoutFooterGrafico2(container, btnLeft, btnCenter, btnRight){
 }
 
 /* ==========================
+   LAYOUT BALANCE (anclado en gráficos)
+========================== */
+function layoutBalanceFixed(container, balanceEl){
+  if (!container || !balanceEl) return;
+  const cs = getComputedStyle(container);
+  if (cs.position === 'static') container.style.position = 'relative';
+  const PAD = 20; // mismo padding lateral
+  balanceEl.style.position  = 'absolute';
+  balanceEl.style.right     = PAD + 'px';
+  balanceEl.style.top       = '50%';
+  balanceEl.style.transform = 'translateY(-50%)';
+}
+function layoutBalanceReset(balanceEl){
+  if (!balanceEl) return;
+  balanceEl.style.position  = '';
+  balanceEl.style.right     = '';
+  balanceEl.style.top       = '';
+  balanceEl.style.transform = '';
+}
+
+/* ==========================
    MOSTRAR (LISTA / G1 / G2)
 ========================== */
 function mostrar() {
@@ -311,13 +332,13 @@ function mostrar() {
     if (!hideCasa || !isCasaCategory(m.c)) t += Number(m.imp)||0;
   }
   const factor = (fs[0] === "TODOS") ? 12 : 1;
-  const bD = document.getElementById("balance");
-  if (bD){
-    bD.innerText = t.toFixed(2) + " €";
-    if (t < 0) bD.style.color = "var(--danger)";
-    else if (t <= (750 * factor))  bD.style.color = "var(--warning)";
-    else if (t <= (1400 * factor)) bD.style.color = "var(--success)";
-    else bD.style.color = "var(--electric-blue)";
+  const balanceEl = document.getElementById("balance");
+  if (balanceEl){
+    balanceEl.innerText = t.toFixed(2) + " €";
+    if (t < 0) balanceEl.style.color = "var(--danger)";
+    else if (t <= (750 * factor))  balanceEl.style.color = "var(--warning)";
+    else if (t <= (1400 * factor)) balanceEl.style.color = "var(--success)";
+    else balanceEl.style.color = "var(--electric-blue)";
   }
 
   // FOOTER (selección robusta + autocuración)
@@ -330,12 +351,12 @@ function mostrar() {
   const modo = movDiv.dataset.modo || "lista";
   const aplicarEstadoCasa = () => { if (btnCenter) btnCenter.classList.toggle("active", !!hideCasa); };
 
-  // Reset handlers/clases
+  // Reset handlers/clases/visibilidad controlada por modo
   [btnLeft, btnCenter, btnRight].forEach(b=>{
     if (!b) return;
     b.onclick = null; b.classList.remove("plus-like","btn-house-anim","active");
     b.style.opacity = "1";
-    b.style.display = ""; // por si venía oculto de otra vista
+    b.style.display = ""; // re-exponer por si venía oculto de otro modo
   });
   layoutFooterReset(btnLeft, btnCenter, btnRight);
 
@@ -348,6 +369,7 @@ function mostrar() {
                     btnRight.innerHTML  = iconGraph2(); btnRight.onclick = () => setModo("graficos2"); }
 
     layoutFooterGrafico1(footerRow, btnLeft, btnCenter, btnRight);
+    layoutBalanceFixed(footerRow, balanceEl);        // balance a la derecha (mismo sitio)
 
   } else if (modo === "graficos2") {
     // G2 — 2 botones (izq+centro). Derecho oculto.
@@ -357,6 +379,7 @@ function mostrar() {
     if (btnRight){  btnRight.innerHTML = ""; btnRight.onclick = null; btnRight.style.display = "none"; }
 
     layoutFooterGrafico2(footerRow, btnLeft, btnCenter, btnRight);
+    layoutBalanceFixed(footerRow, balanceEl);        // balance a la derecha (mismo sitio)
 
   } else { // LISTA — MOVIMIENTOS V0.0 EXACTA
     if (btnLeft){   btnLeft.innerHTML = iconBars(); btnLeft.classList.add("plus-like"); btnLeft.onclick = () => setModo("graficos"); }
@@ -366,11 +389,12 @@ function mostrar() {
       btnRight.innerHTML = "";
       btnRight.onclick = null;
       btnRight.style.display = "none";
-      // Aseguramos que no queda absolutizado de otro modo:
+      // Aseguramos que no queda absolutizado de otra vista:
       btnRight.style.position = ""; btnRight.style.left = ""; btnRight.style.top = "";
       btnRight.style.transform = ""; btnRight.style.opacity = "0";
     }
     layoutFooterReset(btnLeft, btnCenter, btnRight);
+    layoutBalanceReset(balanceEl);                   // balance vuelve al grid normal
   }
 
   // Render contenido
@@ -410,9 +434,12 @@ window.addEventListener('resize', function(){
   const btnLeft   = plus[0] || null;
   const btnCenter = plus[1] || null;
   const btnRight  = plus[2] || null;
+  const balanceEl = document.getElementById('balance');
 
   if (modo === "graficos") layoutFooterGrafico1(footerRow, btnLeft, btnCenter, btnRight);
   else layoutFooterGrafico2(footerRow, btnLeft, btnCenter, btnRight);
+
+  layoutBalanceFixed(footerRow, balanceEl);
 });
 
 /* ==========================
