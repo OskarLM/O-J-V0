@@ -226,3 +226,52 @@ input,select,textarea{width:100%;padding:12px;margin:8px 0;font-size:13px;border
   font-size:26px;
   font-weight:900;
 }
+/* === BOTÓN CASA ANIMADO === */
+.btn-house-anim {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:rgba(212,175,55,0.14);
+  border:1px solid rgba(212,175,55,0.35);
+  transition: transform .25s ease, background-color .25s ease;
+}
+
+.btn-house-anim svg {
+  width:26px;
+  height:26px;
+  stroke:var(--primary);
+  transition: stroke .25s ease;
+}
+
+/* Al pulsar: animación POP */
+.btn-house-anim:active {
+  transform: scale(1.12);
+  background: rgba(212,175,55,0.30);
+}
+
+/* Estado ACTIVO (Casa activada) */
+.btn-house-anim.active {
+  background: rgba(212,175,55,0.45);
+  border-color: var(--gold);
+}
+
+.btn-house-anim.active svg {
+  stroke: var(--gold);
+}
+
+/* Botón izquierdo estilo "+" */
+.plus-like {
+  background: var(--button-bg);
+  color: var(--button-fg);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:26px;
+  font-weight:900;
+}
