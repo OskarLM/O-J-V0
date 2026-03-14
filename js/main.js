@@ -1,8 +1,6 @@
-// === main.js ===
+// === main.js (Parte 1/3) ===
 
-/* ==========================
-   BASES Y ESTADO GLOBAL
-========================== */
+// ---------- BASES Y ESTADO ----------
 const subBase = [
   "Accesorios","Agua","Aita","Ajuar / Electrodomésticos","Alojamiento","Apuestas y juegos","Atracciones","Ayuntamiento",
   "Barco","Cajero","Casa","Comida","Comisiones","Comunidad","Copas","Efectivo","Electrónica","Extraescolar","Farmacia",
@@ -19,16 +17,12 @@ const NOMINA_SUBS = [...mesesLabel];
 let movimientos = JSON.parse(localStorage.getItem('movimientos')) || [];
 let catExtra = JSON.parse(localStorage.getItem('categoriaExtra')) || [];
 let subMaestra = JSON.parse(localStorage.getItem('subMaestra_v2')) || subBase.slice();
-let nBackup = parseInt(localStorage.getItem('nBackup')) || 1;
 
 let registrosVisibles = 25;
 let filtradosGlobal = [];
 let pinActual = "";
 
-/* ==========================
-   PIN V0.1 (hasheado + intentos + cooldown)
-========================== */
-// Requiere utils.js: PIN_STORAGE_KEY, PIN_COOLDOWN_KEY, sha256, getAttempts, setAttempts, isInCooldown, setCooldown
+// ---------- PIN (requiere utils.js con sha256 y helpers) ----------
 async function ensureDefaultPinHash() {
   const pinHash = localStorage.getItem(PIN_STORAGE_KEY);
   if (!pinHash) {
@@ -36,16 +30,70 @@ async function ensureDefaultPinHash() {
     localStorage.setItem(PIN_STORAGE_KEY, h);
   }
 }
+const updateDots = () => {
+  document.querySelectorAll('.dot').forEach((d,i)=>d.classList.toggle('filled', i < pinActual.length));
+};
+const clearPin = () => { pinActual = ""; updateDots(); };
+const unlock = () => {
+  const auth = document.getElementById("authOverlay");
+  if (auth) auth.style.display = "none";
+  const m = document.getElementById("movimientos");
+  m.classList.remove("hidden");
+  m.dataset.permiso = "OK";
+  init();
+};
+async function verifyAndUnlock(pinPlain) {
+  const remainMs = isInCooldown();
+  if (remainMs > 0) {
+    const s = Math.ceil(remainMs / 1000);
+    alert(`Has superado el número de intentos. Espera ${s} s e inténtalo de nuevo.`);
+    return;
+  }
+  await ensureDefaultPinHash();
+  const currentHash = localStorage.getItem(PIN_STORAGE_KEY);
+  const givenHash = await sha256(pinPlain);
+  if (givenHash === currentHash) {
+    setAttempts(0);
+    localStorage.removeItem(PIN_COOLDOWN_KEY);
+    unlock();
+  } else {
+    const prev = getAttempts() + 1;
+    setAttempts(prev);
+    if (prev >= 5) {
+      setCooldown(60); setAttempts(0);
+      alert("Demasiados intentos fallidos. Bloqueo temporal de 60 segundos.");
+    } else {
+      alert("PIN incorrecto");
+    }
+  }
+}
+const pressPin = async (n) => {
+  const remain = (typeof isInCooldown === 'function') ? isInCooldown() : 0;
+  if (remain > 0) { const s = Math.ceil(remain / 1000); alert(`Bloqueado temporalmente. Espera ${s} s.`); return; }
+  if (pinActual.length < 4) {
+    pinActual += String(n); updateDots();
+    if (pinActual.length === 4) { const c = pinActual; clearPin(); await ensureDefaultPinHash(); verifyAndUnlock(c); }
+  }
+};
+const biometricAuth = async () => {
+  try {
+    if (!window.isSecureContext || !window.PublicKeyCredential) {
+      alert("Biometría no disponible (requiere HTTPS y dispositivo compatible)."); return;
+    }
+    alert("Biometría no implementada aún.");
+  } catch(e){ console.error(e); alert("Error de biometría"); }
+};
+document.addEventListener('DOMContentLoaded', () => {
+  ensureDefaultPinHash().catch(console.error);
+  updateDots();
+});
 
-/* ==========================
-   UTILIDADES / NORMALIZACIÓN
-========================== */
+// ---------- UTILIDADES ----------
 const normalizeKey = (s) => (s ?? "")
   .toString().trim().toLowerCase()
   .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
   .replace(/[^\p{L}\p{N}]+/gu,' ')
   .replace(/\s+/g,' ').trim();
-
 const singularizeWordEs = (w) => {
   if (w.endsWith('iones')) return w.slice(0,-5)+'ion';
   if (w.endsWith('ces')) return w.slice(0,-3)+'z';
@@ -75,101 +123,19 @@ const buildCanonIndex = (preferida=[], secundaria=[]) => {
   preferida.forEach(add); secundaria.forEach(add);
   return map;
 };
-// Escape HTML para textos
+// escapar texto
 function esc(s){
   const map = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
   return (s ?? '').toString().replace(/[&<>"']/g, ch => map[ch]);
 }
 
-/* ==========================
-   SEGURIDAD (PIN + Biometría)
-========================== */
-const updateDots = () => {
-  document.querySelectorAll('.dot').forEach((d,i)=>d.classList.toggle('filled', i < pinActual.length));
-};
-const clearPin = () => { pinActual = ""; updateDots(); };
-
-const unlock = () => {
-  document.getElementById("authOverlay").style.display = "none";
-  const m = document.getElementById("movimientos");
-  m.classList.remove("hidden");
-  m.dataset.permiso = "OK";
-  init();
-};
-
-async function verifyAndUnlock(pinPlain) {
-  const remainMs = isInCooldown();
-  if (remainMs > 0) {
-    const s = Math.ceil(remainMs / 1000);
-    alert(`Has superado el número de intentos. Espera ${s} s e inténtalo de nuevo.`);
-    return;
-  }
-  await ensureDefaultPinHash();
-  const currentHash = localStorage.getItem(PIN_STORAGE_KEY);
-  const givenHash = await sha256(pinPlain);
-  if (givenHash === currentHash) {
-    setAttempts(0);
-    localStorage.removeItem(PIN_COOLDOWN_KEY);
-    unlock();
-  } else {
-    const prev = getAttempts() + 1;
-    setAttempts(prev);
-    if (prev >= 5) {
-      setCooldown(60); // 60s
-      setAttempts(0);
-      alert("Demasiados intentos fallidos. Bloqueo temporal de 60 segundos.");
-    } else {
-      alert("PIN incorrecto");
-    }
-  }
-}
-
-const pressPin = async (n) => {
-  const remain = (typeof isInCooldown === 'function') ? isInCooldown() : 0;
-  if (remain > 0) {
-    const s = Math.ceil(remain / 1000);
-    alert(`Bloqueado temporalmente. Espera ${s} s.`);
-    return;
-  }
-  if (pinActual.length < 4) {
-    pinActual += String(n);
-    updateDots();
-    if (pinActual.length === 4) {
-      const candidate = pinActual;
-      clearPin();
-      await ensureDefaultPinHash();
-      verifyAndUnlock(candidate);
-    }
-  }
-};
-
-const biometricAuth = async () => {
-  try {
-    if (!window.isSecureContext || !window.PublicKeyCredential) {
-      alert("Biometría no disponible (requiere HTTPS y dispositivo compatible).");
-      return;
-    }
-    alert("Biometría no implementada aún.");
-  } catch (e) {
-    console.error(e);
-    alert("Error de biometría");
-  }
-};
-
-document.addEventListener('DOMContentLoaded', () => {
-  ensureDefaultPinHash().catch(console.error);
-  updateDots();
-});
-
-/* ==========================
-   ICONOS Y CONTROL DE MODO
-========================== */
+// ---------- ICONOS ----------
 function iconBars(){
   return `
   <svg viewBox="0 0 24 24" class="btn-icon" fill="none" stroke="black" stroke-width="3">
     <line x1="18" y1="20" x2="18" y2="10"></line>
     <line x1="12" y1="20" x2="12" y2="4"></line>
-    <line x1="6" y1="20" x2="6" y2="14"></line>
+    <line x1="6"  y1="20" x2="6"  y2="14"></line>
   </svg>`;
 }
 function iconBack(){
@@ -181,7 +147,7 @@ function iconBack(){
 function iconGraph2(){
   return `
   <svg viewBox="0 0 24 24" class="btn-icon" fill="none" stroke-width="2.6">
-    <rect x="6" y="7" width="4" height="10" fill="#ef4444" stroke="#ef4444" rx="1"></rect>
+    <rect x="6"  y="7" width="4" height="10" fill="#ef4444" stroke="#ef4444" rx="1"></rect>
     <rect x="14" y="5" width="4" height="12" fill="#22c55e" stroke="#22c55e" rx="1"></rect>
   </svg>`;
 }
@@ -192,16 +158,14 @@ function iconCasa(){
     <path d="M5 10.5 V20 H10 V15 H14 V20 H19 V10.5" />
   </svg>`;
 }
+
+// ---------- ESTADO VISTAS ----------
 function setModo(modo){
   const m = document.getElementById("movimientos");
   m.dataset.modo = modo;   // "lista" | "graficos" | "graficos2"
   resetPagina();
   mostrar();
 }
-
-/* ==========================
-   BOTÓN "CASA"
-========================== */
 let hideCasa = false;
 function toggleCasa(){
   hideCasa = !hideCasa;
@@ -212,27 +176,78 @@ function toggleCasa(){
 }
 function isCasaCategory(cat){
   const k = canonicalizeLabel(cat || "");
-  return (
-    k.includes("compra casa") ||
-    k.includes("compra garaje") ||
-    k.includes("venta casa")
-  );
+  return (k.includes("compra casa") || k.includes("compra garaje") || k.includes("venta casa"));
+}
+// === main.js (Parte 2/3) ===
+
+// ---------- LAYOUT FOOTER (sin tocar tu CSS) ----------
+function layoutFooterReset(btnLeft, btnCenter, btnRight){
+  [btnLeft, btnCenter, btnRight].forEach(b=>{
+    if (!b) return;
+    b.style.position = "";
+    b.style.left = "";
+    b.style.top = "";
+    b.style.transform = "";
+    b.style.opacity = "1";
+  });
+}
+function ensureRelative(container){
+  if (!container) return;
+  const cs = getComputedStyle(container);
+  if (cs.position === 'static') container.style.position = 'relative';
+}
+function layoutFooterGrafico1(container, btnLeft, btnCenter, btnRight){
+  if (!container || !btnLeft || !btnCenter || !btnRight) return;
+  ensureRelative(container);
+  const W = container.clientWidth || container.offsetWidth || 0;
+  const SIZE = 65;  // diámetro .plus
+  const PAD  = 20;  // margen izq
+  const xLeft = PAD;                        // 0%
+  const xG2   = (W / 2) - (SIZE / 2);      // 50%
+  const xCasa = Math.round((xLeft + xG2) / 2); // 25%
+
+  [btnLeft, btnCenter, btnRight].forEach(b=>{
+    b.style.position = "absolute";
+    b.style.top = "50%";
+    b.style.transform = "translateY(-50%)";
+  });
+  btnLeft.style.left   = `${xLeft}px`;
+  btnCenter.style.left = `${xCasa}px`;
+  btnRight.style.left  = `${xG2}px`;
+  btnRight.style.opacity = "1";
+}
+function layoutFooterGrafico2(container, btnLeft, btnCenter, btnRight){
+  if (!container || !btnLeft || !btnCenter || !btnRight) return;
+  ensureRelative(container);
+  const W = container.clientWidth || container.offsetWidth || 0;
+  const SIZE = 65;
+  const PAD  = 20;
+  const xLeft = PAD;                        // 0%
+  const xG2   = (W / 2) - (SIZE / 2);      // centro virtual
+  const xCasa = Math.round((xLeft + xG2) / 2); // 25%
+
+  [btnLeft, btnCenter, btnRight].forEach(b=>{
+    b.style.position = "absolute";
+    b.style.top = "50%";
+    b.style.transform = "translateY(-50%)";
+  });
+  btnLeft.style.left   = `${xLeft}px`;
+  btnCenter.style.left = `${xCasa}px`;
+  // btnRight oculto en gráficos 2
+  btnRight.style.opacity = "0";
+  btnRight.style.left = `-9999px`;
 }
 
-/* ==========================
-   VISTA LISTA / GRÁFICOS / GRÁFICOS2
-========================== */
+// ---------- MOSTRAR (lista / graficos / graficos2) ----------
 function mostrar() {
   const movDiv = document.getElementById("movimientos");
   if (!movDiv || movDiv.dataset.permiso !== "OK") return;
 
-  const fs = ["filtroMes","filtroAño","filtroCat","filtroSub","filtroOri"].map(id => {
-    const el = document.getElementById(id);
-    return el ? el.value : "TODOS";
-  });
+  const fsIds = ["filtroMes","filtroAño","filtroCat","filtroSub","filtroOri"];
+  const fs = fsIds.map(id => { const el = document.getElementById(id); return el ? el.value : (id==='filtroMes'?'TODOS':'TODOS'); });
 
-  // Filtrado base para vistas
-  filtradosGlobal = movimientos
+  // Filtrar + ordenar
+  filtradosGlobal = (movimientos || [])
     .filter(m => {
       const d = (m.f || "").split("-");
       const cM = fs[0] === "TODOS" || (parseInt(d[1]) - 1).toString() === fs[0];
@@ -244,12 +259,11 @@ function mostrar() {
     })
     .sort((a,b) => new Date(b.f) - new Date(a.f));
 
-  // Balance (con toggle Casa aplicado)
+  // Balance
   let t = 0;
   filtradosGlobal
     .filter(m => hideCasa ? !isCasaCategory(m.c) : true)
-    .forEach(m => t += Number(m.imp) || 0);
-
+    .forEach(m => t += Number(m.imp)||0 );
   const factor = (fs[0] === "TODOS") ? 12 : 1;
   const bD = document.getElementById("balance");
   if (bD){
@@ -260,20 +274,21 @@ function mostrar() {
     else bD.style.color = "var(--electric-blue)";
   }
 
-  // === FOOTER DINÁMICO (3 botones .plus en el grid) ===
+  // --------- FOOTER ---------
   const footerRow = document.querySelector(".footer-row");
-  const btnLeft  = document.querySelector(".footer-row .plus:nth-child(1)");
-  const btnCenter= document.querySelector(".footer-row .plus:nth-child(2)");
-  const btnRight = document.querySelector(".footer-row .plus:nth-child(3)");
+  // 👇 MUY IMPORTANTE: tomamos TODOS los .plus (incluye el invisible)
+  const botones = document.querySelectorAll(".footer-row .plus");
+  const btnLeft   = botones[0] || null;
+  const btnCenter = botones[1] || null;
+  const btnRight  = botones[2] || null; // ← éste es el PLUS “fantasma” que usamos para G2
 
   const modo = movDiv.dataset.modo || "lista";
-  function aplicarEstadoCasa(){ if (btnCenter) btnCenter.classList.toggle("active", !!hideCasa); }
+  const aplicarEstadoCasa = () => { if (btnCenter) btnCenter.classList.toggle("active", !!hideCasa); };
 
-  // Limpieza de clases/eventos y reset layout
+  // Reset handlers/clases
   [btnLeft, btnCenter, btnRight].forEach(b=>{
     if (!b) return;
-    b.onclick = null;
-    b.classList.remove("plus-like","btn-house-anim","active");
+    b.onclick = null; b.classList.remove("plus-like","btn-house-anim","active");
     b.style.opacity = "1";
   });
   layoutFooterReset(btnLeft, btnCenter, btnRight);
@@ -288,32 +303,26 @@ function mostrar() {
       btnCenter.onclick = () => { toggleCasa(); aplicarEstadoCasa(); };
       aplicarEstadoCasa();
     }
-    // → G2
+    // → G2 (en el plus “fantasma”, pero visible al posicionarlo)
     if (btnRight){ btnRight.innerHTML = iconGraph2(); btnRight.onclick = () => setModo("graficos2"); }
 
   } else if (modo === "graficos2") {
-    // ← Atrás
     if (btnLeft){ btnLeft.innerHTML = iconBack(); btnLeft.onclick = () => setModo("graficos"); }
-    // ○ Casa
     if (btnCenter){
       btnCenter.innerHTML = iconCasa();
       btnCenter.classList.add("btn-house-anim");
       btnCenter.onclick = () => { toggleCasa(); aplicarEstadoCasa(); };
       aplicarEstadoCasa();
     }
-    // → vacío
-    if (btnRight){ btnRight.innerHTML = ""; btnRight.style.opacity = "0"; btnRight.onclick = null; }
+    if (btnRight){ btnRight.innerHTML = ""; btnRight.onclick = null; }
 
   } else { // LISTA
-    // ← Botón “Gráficos” con estética del “+”
     if (btnLeft){ btnLeft.innerHTML = iconBars(); btnLeft.classList.add("plus-like"); btnLeft.onclick = () => setModo("graficos"); }
-    // ○ +
     if (btnCenter){ btnCenter.innerHTML = "+"; btnCenter.onclick = () => abrirFormulario(); }
-    // → vacío
     if (btnRight){ btnRight.innerHTML = ""; btnRight.onclick = null; }
   }
 
-  // === APLICAR LAYOUT (solo en modos gráficos) ===
+  // Aplicar layout (solo en gráficos)
   if (modo === "graficos") {
     layoutFooterGrafico1(footerRow, btnLeft, btnCenter, btnRight);
   } else if (modo === "graficos2") {
@@ -322,7 +331,7 @@ function mostrar() {
     layoutFooterReset(btnLeft, btnCenter, btnRight);
   }
 
-  // Render contenido
+  // --------- RENDER CUERPO ---------
   const listaDiv = document.getElementById("lista");
   if (modo === "graficos" || modo === "graficos2") {
     listaDiv.innerHTML = "";
@@ -332,7 +341,6 @@ function mostrar() {
       renderizarGraficos2();
     }
   } else {
-    // LISTA
     listaDiv.innerHTML = filtradosGlobal
       .slice(0, registrosVisibles)
       .map(m => `
@@ -346,69 +354,11 @@ function mostrar() {
     if (loader) loader.style.display = "none";
   }
 
-  // Indicador copia
   ensureBackupIndicator();
   updateBackupIndicator();
 }
 
-/* ==========================
-   LAYOUT de botones del footer (Gráficos)
-========================== */
-function layoutFooterReset(btnLeft, btnCenter, btnRight){
-  [btnLeft, btnCenter, btnRight].forEach(b=>{
-    if (!b) return;
-    b.style.position = "";
-    b.style.left = "";
-    b.style.right = "";
-    b.style.top = "";
-    b.style.transform = "";
-    b.style.opacity = "1";
-  });
-}
-function layoutFooterGrafico1(container, btnLeft, btnCenter, btnRight){
-  if (!container || !btnLeft || !btnCenter || !btnRight) return;
-  const W = container.clientWidth || container.offsetWidth || 0;
-  const SIZE = 65;      // diámetro .plus
-  const PAD  = 20;      // margen izquierdo
-
-  const xLeft = PAD;                           // Atrás (0% + padding)
-  const xG2   = (W / 2) - (SIZE / 2);          // G2 (50% exacto)
-  const xCasa = Math.round((xLeft + xG2) / 2);  // Casa (≈25%)
-
-  [btnLeft, btnCenter, btnRight].forEach(b=>{
-    b.style.position = "absolute";
-    b.style.top = "50%";
-    b.style.transform = "translateY(-50%)";
-  });
-
-  btnLeft.style.left = `${xLeft}px`;
-  btnCenter.style.left = `${xCasa}px`;
-  btnRight.style.left = `${xG2}px`;
-  btnRight.style.opacity = "1";
-}
-function layoutFooterGrafico2(container, btnLeft, btnCenter, btnRight){
-  if (!container || !btnLeft || !btnCenter || !btnRight) return;
-  const W = container.clientWidth || container.offsetWidth || 0;
-  const SIZE = 65;
-  const PAD  = 20;
-
-  const xLeft = PAD;                           // Atrás
-  const xG2   = (W / 2) - (SIZE / 2);          // Centro virtual
-  const xCasa = Math.round((xLeft + xG2) / 2);  // Casa (≈25%)
-
-  [btnLeft, btnCenter, btnRight].forEach(b=>{
-    b.style.position = "absolute";
-    b.style.top = "50%";
-    b.style.transform = "translateY(-50%)";
-  });
-
-  btnLeft.style.left = `${xLeft}px`;
-  btnCenter.style.left = `${xCasa}px`;
-  btnRight.style.opacity = "0";
-  btnRight.style.left = `-9999px`;
-}
-
-// Reaplicar layout si cambia tamaño/orientación
+// Recalcular en resize/orientación
 window.addEventListener('resize', ()=>{
   const movDiv = document.getElementById("movimientos");
   if (!movDiv) return;
@@ -416,17 +366,16 @@ window.addEventListener('resize', ()=>{
   if (modo !== "graficos" && modo !== "graficos2") return;
 
   const footerRow = document.querySelector(".footer-row");
-  const btnLeft  = document.querySelector(".footer-row .plus:nth-child(1)");
-  const btnCenter= document.querySelector(".footer-row .plus:nth-child(2)");
-  const btnRight = document.querySelector(".footer-row .plus:nth-child(3)");
+  const botones = document.querySelectorAll(".footer-row .plus");
+  const btnLeft   = botones[0] || null;
+  const btnCenter = botones[1] || null;
+  const btnRight  = botones[2] || null;
 
   if (modo === "graficos") layoutFooterGrafico1(footerRow, btnLeft, btnCenter, btnRight);
   else layoutFooterGrafico2(footerRow, btnLeft, btnCenter, btnRight);
 });
 
-/* ==========================
-   GRÁFICOS 1: CATEGORÍAS ↔ SUBCATEGORÍAS (Opción C) + DRILL-DOWN
-========================== */
+// ---------- GRÁFICOS 1 ----------
 function renderizarBarrasGraficos(f) {
   const lista = document.getElementById("lista");
   const elFC = document.getElementById("filtroCat");
@@ -454,21 +403,18 @@ function renderizarBarrasGraficos(f) {
       <span style="color:var(--danger)">+</span>
     </div>
   `;
-
   const items = Object.entries(totales).sort((a,b)=>b[1]-a[1]);
   if (!items.length) {
     lista.innerHTML += html + `<div class="card" style="text-align:center;border:none"><div style="opacity:.8">No hay datos para los filtros seleccionados.</div></div>`;
     return;
   }
-
   lista.innerHTML += html + items.map(([label,val])=>{
     const t1 = Math.min(val, 50*f),
           t2 = val > 50*f ? Math.min(val - 50*f ,150*f) : 0,
           t3 = val > 200*f ? Math.min(val - 200*f,300*f) : 0,
           t4 = val > 500*f ? (val - 500*f) : 0;
     return `
-      <div class="card"
-           style="border:none;background:transparent;cursor:pointer"
+      <div class="card" style="border:none;background:transparent;cursor:pointer"
            data-label="${esc(label)}"
            onclick="handleGraficoBarClick(this.dataset.label)">
         <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:5px">
@@ -484,18 +430,12 @@ function renderizarBarrasGraficos(f) {
     `;
   }).join("");
 }
-
 function handleGraficoBarClick(label){
   const selCat = document.getElementById('filtroCat');
   const actual = (selCat && selCat.value) || 'TODAS';
-  if (actual === 'TODAS') {
-    if (selCat) selCat.value = label;
-    resetPagina(); mostrar();
-    return;
-  }
+  if (actual === 'TODAS') { if (selCat) selCat.value = label; resetPagina(); mostrar(); return; }
   abrirDetalleMovs(actual, label);
 }
-
 function abrirDetalleMovs(categoria, subcategoria){
   try {
     let base = filtradosGlobal.slice();
@@ -532,17 +472,13 @@ function abrirDetalleMovs(categoria, subcategoria){
   }
 }
 
-/* ==========================
-   GRÁFICOS 2: Columnas + Animación + Tooltip + Colores por BALANCE
-========================== */
+// ---------- GRÁFICOS 2 ----------
 function renderizarGraficos2() {
   const lista = document.getElementById("lista");
   const oldChart = lista.querySelector('.g2-wrap'); if (oldChart) oldChart.remove();
 
-  const fs = ["filtroMes","filtroAño","filtroCat","filtroSub","filtroOri"].map(id => {
-    const el = document.getElementById(id);
-    return el ? el.value : "TODOS";
-  });
+  const fsIds = ["filtroMes","filtroAño","filtroCat","filtroSub","filtroOri"];
+  const fs = fsIds.map(id => { const el = document.getElementById(id); return el ? el.value : "TODOS"; });
 
   const hoy = new Date();
   const meses = [];
@@ -628,13 +564,13 @@ function renderizarGraficos2() {
     chart.dataset.tipBound = '1';
   }
 }
+// === main.js (Parte 3/3) ===
 
-/* ==========================
-   FORMULARIO / CRUD
-========================== */
+// ---------- FORMULARIO / CRUD ----------
 const llenar = (id, base, extra, pre = "", opts = {}) => {
   const s = document.getElementById(id);
   const origenActual = opts.origenActual || "";
+  if (!s) return;
   s.innerHTML = `<option value="" disabled ${pre === "" ? 'selected' : ''}>Seleccionar...</option>`;
   let values = [...new Set([...base, ...extra])];
   if (id === "categoria") {
@@ -695,11 +631,7 @@ const abrirFormulario = (id = null) => {
 
 const guardar = () => {
   const ids = ["editId","origen","categoria","subcategoria","fecha","descripcion","importe"];
-  // ✅ Clave computada [id]
-  const v = ids.reduce((acc,id)=>({
-    ...acc,
-    [id]: (document.getElementById(id) ? document.getElementById(id).value : "")
-  }),{});
+  const v = ids.reduce((acc,id)=>{ acc[id] = (document.getElementById(id) ? document.getElementById(id).value : ""); return acc; },{});
   const imp = parseFloat(v.importe);
   if (!v.origen || !v.categoria || !v.subcategoria || isNaN(imp)) return alert("Faltan datos");
 
@@ -732,7 +664,7 @@ const volver = () => {
   mostrar();
 };
 
-/* === “+ Añadir nuevo…” SIN prompt(): popup premium entrega valor === */
+// Añadir nuevo valor vía popup Premium
 const manejarNuevo = (el, tipo) => {
   if (el.value !== "+") return;
   let n = el.dataset.nuevoValor || "";
@@ -746,8 +678,7 @@ const manejarNuevo = (el, tipo) => {
     const catIdx = buildCanonIndex(catBase, catExtra);
     if (NOMINA_CATS.some(x => canonicalizeLabel(x) === keyNew)) {
       alert("No puedes crear manualmente 'Oskar' ni 'Josune'. Selecciona 'Nómina'.");
-      el.value = "";
-      return;
+      el.value = ""; return;
     }
     if (!catIdx.has(keyNew)) {
       catExtra.push(pretty);
@@ -768,7 +699,7 @@ const manejarNuevo = (el, tipo) => {
 
 const borrarElemento = (tipo) => {
   const select = document.getElementById(tipo);
-  const val = select.value;
+  const val = select && select.value;
   if (!val) return;
 
   if (tipo === 'categoria') {
@@ -799,6 +730,7 @@ const abrirGraficos = () => {
 };
 const resetPagina = () => { registrosVisibles = 25; window.scrollTo(0,0); };
 
+// Listas filtros
 const actualizarListas = () => {
   const fC = document.getElementById("filtroCat"),
         fS = document.getElementById("filtroSub"),
@@ -818,9 +750,7 @@ const actualizarListas = () => {
   }
 };
 
-/* ==========================
-   NORMALIZACIÓN RETROACTIVA
-========================== */
+// Normalización retroactiva
 function normalizarListasExistentes(){
   const vistosCat = new Set(Object.values(catBase).map(v => canonicalizeLabel(v)));
   const nuevaExtra = [];
@@ -839,10 +769,7 @@ function normalizarListasExistentes(){
   const nuevasSubs = [];
   subMaestra.forEach(v=>{
     const k = canonicalizeLabel(v);
-    if (!vistosSub.has(k)) {
-      vistosSub.add(k);
-      nuevasSubs.push(v);
-    }
+    if (!vistosSub.has(k)) { vistosSub.add(k); nuevasSubs.push(v); }
   });
   subMaestra = nuevasSubs;
   localStorage.setItem('subMaestra_v2', JSON.stringify(subMaestra));
@@ -856,18 +783,13 @@ function normalizarListasExistentes(){
     let c = m.c, s = m.s;
     if (catIndexCanon.has(kc)) c = catIndexCanon.get(kc);
     if (subIndexCanon.has(ks)) s = subIndexCanon.get(ks);
-    if (c!==m.c || s!==m.s){
-      cambiado = true;
-      return {...m, c, s, ts: Math.max(Date.now(), (m.ts||0)+1)};
-    }
+    if (c!==m.c || s!==m.s){ cambiado = true; return {...m, c, s, ts: Math.max(Date.now(), (m.ts||0)+1)}; }
     return m;
   }).sort((a,b)=>new Date(b.f)-new Date(a.f));
   if (cambiado) localStorage.setItem('movimientos', JSON.stringify(movimientos));
 }
 
-/* ==========================
-   INIT + SCROLL
-========================== */
+// INIT + SCROLL
 const init = () => {
   const fM = document.getElementById("filtroMes"),
         fA = document.getElementById("filtroAño"),
@@ -878,7 +800,6 @@ const init = () => {
     mesesLabel.forEach((m, i) => fM.add(new Option(m, i)));
     fM.value = hoy.getMonth();
   }
-
   if (fA){
     fA.innerHTML = '<option value="TODOS">Año: TODOS</option>';
     for (let a = 2020; a <= 2030; a++) fA.add(new Option(a, a));
@@ -899,9 +820,7 @@ window.onscroll = () => {
   }
 };
 
-/* ==========================
-   CSV: EXPORTACIÓN / IMPORTACIÓN
-========================== */
+// CSV
 const exportarCSV = () => {
   if (!movimientos || movimientos.length === 0) { alert("No hay datos para exportar."); return; }
   const SEP = ";";
@@ -916,7 +835,6 @@ const exportarCSV = () => {
   const url = URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=fileName;
   document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
 };
-
 const importarCSV = (e) => {
   const file = e.target.files && e.target.files[0]; if (!file) return;
   const reader = new FileReader();
@@ -925,16 +843,13 @@ const importarCSV = (e) => {
       const text = reader.result.replace(/^\uFEFF/,"");
       const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
       if (!lines.length) { alert("El archivo está vacío."); return; }
-
       const header = lines[0];
       const counts = { tab:(header.match(/\t/g)||[]).length, semi:(header.match(/;/g)||[]).length, comma:(header.match(/,/g)||[]).length };
       let delim = "\t"; if (counts.semi>=counts.tab && counts.semi>=counts.comma) delim=";"; else if (counts.comma>=counts.tab) delim=",";
-
       const parseLine = (line) => { const out=[]; let cur="", inQ=false; for(let i=0;i<line.length;i++){ const ch=line[i];
         if(ch==='"'){ if(inQ && line[i+1]==='"'){ cur+='"'; i++; } else inQ=!inQ; }
         else if(ch===delim && !inQ){ out.push(cur); cur=""; }
         else { cur+=ch; } } out.push(cur); return out; };
-
       const cols = parseLine(header).map(h=>h.trim().toLowerCase());
       const idx = {
         fecha: cols.findIndex(c => c.startsWith("fecha")),
@@ -947,40 +862,31 @@ const importarCSV = (e) => {
       const required = ["fecha","origen","categoria","subcategoria","importe"];
       const missing = required.filter(k => idx[k] < 0);
       if (missing.length) { alert("Faltan columnas: " + missing.join(", ")); return; }
-
       const toISODate = (ddmmyyyy) => { const m=ddmmyyyy.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); if(!m) return ddmmyyyy; return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`; };
       const parseEuroNumber = (s) => { let t=(s||'').toString().trim(); t=t.replace(/\.(?=\d{3}(?:\D|$))/g,''); t=t.replace(',', '.'); const n=parseFloat(t); return isNaN(n)?0:n; };
       const cleanText = (s) => { if(!s) return ""; let t=s.replace(/\\"{2,}/g,'"').trim(); if(t.startsWith('"') && t.endsWith('"')) t=t.slice(1,-1); return t.trim(); };
-
       const catIndexCanon = buildCanonIndex([...catBase, ...catExtra, ...NOMINA_CATS], []);
       const subIndexCanon = buildCanonIndex([...subMaestra, ...NOMINA_SUBS], []);
       const nuevos = [];
-
       for (let i = 1; i < lines.length; i++) {
         const arr = parseLine(lines[i]); if (arr.every(v => (v||'').trim()==='')) continue;
-
         const f = toISODate(cleanText(arr[idx.fecha] ?? ''));
         let o = cleanText(arr[idx.origen] ?? '');
         let c = mostrarBonito(cleanText(arr[idx.categoria] ?? ''));
         let s = mostrarBonito(cleanText(arr[idx.subcategoria] ?? ''));
         let d = cleanText(arr[idx.descripcion] ?? '');
-
         const oLow = o.toLowerCase();
         if (oLow.startsWith('nom')) o='Nómina'; else if (oLow.startsWith('gas')) o='Gasto'; else if (oLow.startsWith('ing')) o='Ingreso';
-
         const keyC = canonicalizeLabel(c), keyS = canonicalizeLabel(s);
         if (catIndexCanon.has(keyC)) c = catIndexCanon.get(keyC);
         if (subIndexCanon.has(keyS)) s = subIndexCanon.get(keyS);
-
         let imp = parseFloat(parseEuroNumber(arr[idx.importe] ?? '0'));
         if (o === 'Gasto' && imp > 0) imp = -Math.abs(imp);
         if (o !== 'Gasto' && imp < 0) imp = Math.abs(imp);
-
         const mov = { id:`id_${Date.now()}_${i}`, f, o, c, s, imp, d, ts: Date.now()+i };
         if (!f || !o || !c || !s || isNaN(imp)) continue;
         nuevos.push(mov);
       }
-
       const addIfNewCanon = (list, storeKey, value) => {
         const k = canonicalizeLabel(value);
         const exists = list.some(v => canonicalizeLabel(v) === k);
@@ -990,11 +896,9 @@ const importarCSV = (e) => {
         if (![...catBase, ...catExtra, ...NOMINA_CATS].some(v => canonicalizeLabel(v) === canonicalizeLabel(m.c))) addIfNewCanon(catExtra, 'categoriaExtra', m.c);
         if (![...subMaestra, ...NOMINA_SUBS].some(v => canonicalizeLabel(v) === canonicalizeLabel(m.s))) addIfNewCanon(subMaestra, 'subMaestra_v2', m.s);
       });
-
       movimientos = [...movimientos, ...nuevos].sort((a,b)=>new Date(b.f)-new Date(a.f));
       localStorage.setItem('movimientos', JSON.stringify(movimientos));
       actualizarListas(); resetPagina(); mostrar();
-
       alert(`Importación completa: ${nuevos.length} registros añadidos.`);
     } catch (err) {
       console.error(err); alert("Error al importar el CSV. Revisa el formato.");
@@ -1004,9 +908,7 @@ const importarCSV = (e) => {
   reader.readAsText(file, 'UTF-8');
 };
 
-/* ==========================
-   POPUPS (Premium / Nómina)
-========================== */
+// POPUPS Premium / Nómina
 (function(){
   const lanzarPopupPremium = (el,tipo) => {
     const overlay=document.createElement('div'); overlay.className='premium-overlay';
@@ -1031,7 +933,6 @@ const importarCSV = (e) => {
     }
   },true);
 })();
-
 (function(){
   const lanzarPopupNomina = () => {
     const overlay=document.createElement('div'); overlay.className='nomina-overlay';
@@ -1048,14 +949,14 @@ const importarCSV = (e) => {
     document.getElementById('btn_cancel_nom').onclick=()=>{ document.getElementById("origen").value="Gasto";
       llenar('categoria',catBase,catExtra,"",{origenActual:"Gasto"}); llenar('subcategoria',subMaestra,[], "",{origenActual:"Gasto"}); close(); };
   };
-
   document.addEventListener('change',(e)=>{
     if(e.target.id === 'origen'){
       const o = e.target.value;
       if (o === "Nómina") {
         const fVal = document.getElementById("fecha").value || new Date().toISOString().split("T")[0];
         const mIdx = new Date(fVal + "T00:00:00").getMonth();
-        document.getElementById("subcategoria").innerHTML = `<option value="${mesesLabel[mIdx]}" selected>${mesesLabel[mIdx]}</option>`;
+        const sub = document.getElementById("subcategoria");
+        if (sub) sub.innerHTML = `<option value="${mesesLabel[mIdx]}" selected>${mesesLabel[mIdx]}</option>`;
         lanzarPopupNomina();
       } else {
         llenar('categoria',catBase,catExtra,"",{origenActual:o});
@@ -1065,9 +966,7 @@ const importarCSV = (e) => {
   },true);
 })();
 
-/* ==========================
-   ELIMINAR REGISTRO
-========================== */
+// ELIMINAR REGISTRO
 window.eliminarRegistroActual = function(){
   const idAEliminar = document.getElementById("editId").value;
   if (!idAEliminar) return;
@@ -1078,9 +977,7 @@ window.eliminarRegistroActual = function(){
   }
 };
 
-/* ==========================
-   BACKUPS (cifrado con el PIN, rotativo, auto-descarga, OneDrive)
-========================== */
+// BACKUPS (resumen: cifrado + rotativo + descarga)
 function hexToBytes(hex){ const a=[]; for(let i=0;i<hex.length;i+=2) a.push(parseInt(hex.slice(i,i+2),16)); return new Uint8Array(a); }
 function bytesToBase64(bytes){ if (typeof btoa==='function'){ let bin=''; bytes.forEach(b=>bin+=String.fromCharCode(b)); return btoa(bin); } else { return Buffer.from(bytes).toString('base64'); } }
 function base64ToBytes(b64){ if (typeof atob==='function'){ const bin=atob(b64); const out=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i); return out; } else { return new Uint8Array(Buffer.from(b64,'base64')); } }
@@ -1137,7 +1034,6 @@ async function guardarCopiaEnOneDrive(){
     const hh=String(d.getHours()).padStart(2,'0'), mm=String(d.getMinutes()).padStart(2,'0');
     const filename=`backup_onedrive_${YYYY}-${MM}-${DD}_${hh}-${mm}.json`;
     const blob=new Blob([JSON.stringify(enc,null,2)],{type:'application/json'});
-
     if (window.showSaveFilePicker){
       const handle = await window.showSaveFilePicker({ suggestedName:filename, types:[{description:"JSON Backup", accept:{"application/json":[".json"]}}] });
       const writable = await handle.createWritable(); await writable.write(blob); await writable.close();
@@ -1201,18 +1097,17 @@ function updateBackupIndicator(){
 }
 setInterval(updateBackupIndicator, 60000);
 
-/* ==========================
-   REGISTRO SERVICE WORKER (PWA)
-========================== */
+// SW (si existe)
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').catch(err => console.error("SW ERROR:", err));
   });
 }
 
-/* ==========================
-   EXPONER FUNCIONES AL GLOBAL
-========================== */
+// --------- NO-OP para mantener compatibilidad con tu botón RESET ---------
+function resetTotal(){ /* sin operación; preserva UI antigua */ }
+
+// --------- EXPONER AL GLOBAL ---------
 window.pressPin = pressPin;
 window.clearPin = clearPin;
 window.biometricAuth = biometricAuth;
