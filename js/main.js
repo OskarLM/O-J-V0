@@ -26,6 +26,11 @@ let registrosVisibles = 25;
 let filtradosGlobal = [];
 let pinActual = "";
 
+/* ==========================
+   PIN V0.1 (hasheado + intentos + cooldown)
+========================== */
+// Requiere desde utils.js: PIN_STORAGE_KEY, PIN_COOLDOWN_KEY, sha256, getAttempts, setAttempts, isInCooldown, setCooldown
+
 // Garantiza hash de PIN por defecto ("7143") en primer arranque
 async function ensureDefaultPinHash() {
   const pinHash = localStorage.getItem(PIN_STORAGE_KEY);
@@ -152,6 +157,7 @@ const biometricAuth = async () => {
 // Asegura hash por defecto al cargar
 document.addEventListener('DOMContentLoaded', () => {
   ensureDefaultPinHash().catch(console.error);
+  updateDots();
 });
 
 /* ==========================
@@ -305,15 +311,10 @@ const abrirFormulario = (id = null) => {
 
 const guardar = () => {
   const ids = ["editId","origen","categoria","subcategoria","fecha","descripcion","importe"];
-
-  // ✅ corrección clave aquí ([id]: ...)
+  // ✅ FIX: propiedad computada en el reduce
   const v = ids.reduce((acc,id)=>({ ...acc, [id]: document.getElementById(id).value }),{});
-
   const imp = parseFloat(v.importe);
-  if (!v.origen || !v.categoria || !v.subcategoria || isNaN(imp)) {
-    alert("Faltan datos");
-    return;
-  }
+  if (!v.origen || !v.categoria || !v.subcategoria || isNaN(imp)) return alert("Faltan datos");
 
   const m = {
     id : v.editId || `id_${Date.now()}`,
@@ -325,17 +326,6 @@ const guardar = () => {
     d  : v.descripcion,
     ts : Date.now()
   };
-
-  if (v.editId) {
-    const idx = movimientos.findIndex(x => x.id.toString() === v.editId.toString());
-    if (idx !== -1) movimientos[idx] = m;
-  } else {
-    movimientos.push(m);
-    if (movimientos.length % 15 === 0) ejecutarBackupRotativo();
-  }
-  localStorage.setItem('movimientos', JSON.stringify(movimientos));
-  volver();
-};
 
   if (v.editId) {
     const idx = movimientos.findIndex(x => x.id.toString() === v.editId.toString());
@@ -365,7 +355,7 @@ const manejarNuevo = (el, tipo) => {
 
     if (tipo === "categoria") {
       const catIdx = buildCanonIndex(catBase, catExtra);
-      // Bloqueo nómima manual
+      // Bloqueo nómina manual
       if (NOMINA_CATS.some(x => canonicalizeLabel(x) === keyNew)) {
         alert("No puedes crear manualmente 'Oskar' ni 'Josune'. Selecciona 'Nómina' y usa el popup.");
         el.value = "";
@@ -641,7 +631,7 @@ const importarCSV = (e) => {
       };
       const cleanText = (s) => {
         if (!s) return "";
-        let t = s.replace(/\\\"{2,}/g, '"').trim();
+        let t = s.replace(/\\"{2,}/g, '"').trim();
         if (t.startsWith('"') && t.endsWith('"')) t = t.slice(1,-1);
         return t.trim();
       };
@@ -812,3 +802,28 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(err => console.error("SW ERROR:", err));
   });
 }
+
+/* ==========================
+   EXPONER FUNCIONES AL GLOBAL
+   (para que los handlers inline del HTML siempre funcionen)
+========================== */
+// PIN
+window.pressPin = pressPin;
+window.clearPin = clearPin;
+window.biometricAuth = biometricAuth;
+
+// Navegación y acciones
+window.resetPagina = resetPagina;
+window.mostrar = mostrar;
+window.abrirFormulario = abrirFormulario;
+window.volver = volver;
+window.exportarCSV = exportarCSV;
+window.importarCSV = importarCSV;
+window.manejarNuevo = manejarNuevo;
+window.borrarElemento = borrarElemento;
+window.abrirGraficos = abrirGraficos;
+window.ejecutarBackupRotativo = ejecutarBackupRotativo;
+window.resetTotal = resetTotal;
+// eliminarRegistroActual ya se declaró como window.*
+window.init = init;
+window.actualizarListas = actualizarListas;
