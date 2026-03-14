@@ -72,5 +72,40 @@ input,select,textarea{width:100%;padding:12px;margin:8px 0;font-size:13px;border
 .btn-oskar{background:linear-gradient(180deg,#bf953f,#fcf6ba,#b38728);color:#000}
 .btn-josune{background:linear-gradient(180deg,#a00050,#ff1493,#ff85c1);color:#fff}
 .btn-cancel{background:linear-gradient(180deg,#757575,#c0c0c0,#ffffff);color:#000;margin-bottom:0}
+/* ===== V0.1 Mejoras responsive para Pixel 9a ===== */
 
+/* Contenedor de barra flexible */
+.card .bar-flex {
+  display: flex;
+  height: clamp(12px, 2.8vw, 20px); /* auto‑ajustado para pantallas densas */
+  border-radius: 8px;
+  overflow: hidden;
+  background: #000;
+  border: 1px solid rgba(212,175,55,.25);
+}
 
+/* Cada segmento interno de la barra */
+.card .bar-segment {
+  height: 100%;
+  flex-grow: 1;
+  transition: width 0.25s ease-out;
+}
+
+/* Ajuste de tipografías específicas para Pixel 9a */
+@media (max-width: 420px) {
+  .card b,
+  .card .meta {
+    font-size: 13px;
+  }
+
+  .card .monto {
+    font-size: 15px;
+  }
+}
+
+/* Ajuste extra para pantallas 1080px high-dpi */
+@media (min-width: 360px) and (max-width: 420px) and (min-resolution: 350dpi) {
+  .card .bar-flex {
+    height: clamp(12px, 3.2vw, 18px);
+  }
+}
