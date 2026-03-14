@@ -10,16 +10,15 @@
 
   <!-- PWA -->
   <meta name="theme-color" content="#d4af37" />
-  <link rel="manifest" href="./manifest.json" />
+  ./manifest.json
 
   <!-- iOS meta -->
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <link rel="apple-touch-icon"
-        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230b0f1a'/><circle cx='50' cy='50' r='40' fill='none' stroke='%23d4af37' stroke-width='4'/><text x='50%25' y='55%25' dominant-baseline='middle' text-anchor='middle' font-family='serif' font-weight='bold' font-size='35' fill='%23d4af37'>O%26J</text></svg>'" />
+  data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230b0f1a'/><circle cx='50' cy='50' r='40' fill='none' stroke='%23d4af37' stroke-width='4'/><text x='50%25' y='55%25' dominant-baseline='middle' text-anchor='middle' font-family='serif' font-weight='bold' font-size='35' fill='%23d4af37'>O%26J</text></svg>'
 
-  <!-- CSS principal extraído -->
-  <link rel="stylesheet" href="./css/style.css" />
+  <!-- CSS principal -->
+  ./css/style.css
 </head>
 
 <body>
@@ -29,18 +28,18 @@
       <h2 style="color:var(--primary);margin-bottom:10px">ACCESO GOLD</h2>
       <div class="pin-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
       <div class="pin-grid">
-        <button class="btn-pin" onclick="pressPin(1)" aria-label="1">1</button>
-        <button class="btn-pin" onclick="pressPin(2)" aria-label="2">2</button>
-        <button class="btn-pin" onclick="pressPin(3)" aria-label="3">3</button>
-        <button class="btn-pin" onclick="pressPin(4)" aria-label="4">4</button>
-        <button class="btn-pin" onclick="pressPin(5)" aria-label="5">5</button>
-        <button class="btn-pin" onclick="pressPin(6)" aria-label="6">6</button>
-        <button class="btn-pin" onclick="pressPin(7)" aria-label="7">7</button>
-        <button class="btn-pin" onclick="pressPin(8)" aria-label="8">8</button>
-        <button class="btn-pin" onclick="pressPin(9)" aria-label="9">9</button>
-        <button class="btn-pin" onclick="biometricAuth()" style="color:var(--electric-blue)" aria-label="Biometría">🫬</button>
-        <button class="btn-pin" onclick="pressPin(0)" aria-label="0">0</button>
-        <button class="btn-pin" onclick="clearPin()" style="color:var(--danger)" aria-label="Borrar">✖</button>
+        <button class="btn-pin" onclick="pressPin(1)">1</button>
+        <button class="btn-pin" onclick="pressPin(2)">2</button>
+        <button class="btn-pin" onclick="pressPin(3)">3</button>
+        <button class="btn-pin" onclick="pressPin(4)">4</button>
+        <button class="btn-pin" onclick="pressPin(5)">5</button>
+        <button class="btn-pin" onclick="pressPin(6)">6</button>
+        <button class="btn-pin" onclick="pressPin(7)">7</button>
+        <button class="btn-pin" onclick="pressPin(8)">8</button>
+        <button class="btn-pin" onclick="pressPin(9)">9</button>
+        <button class="btn-pin" onclick="biometricAuth()" style="color:var(--electric-blue)">🫬</button>
+        <button class="btn-pin" onclick="pressPin(0)">0</button>
+        <button class="btn-pin" onclick="clearPin()" style="color:var(--danger)">✖</button>
       </div>
     </div>
   </div>
@@ -52,6 +51,7 @@
     <div class="topbar">MIS GASTOS • V0.0 BETA</div>
 
     <div class="container">
+      <!-- Filtros -->
       <div class="filtros-wrapper">
         <div class="filtro-item">
           <span style="font-size:9px;color:var(--primary)">AÑO</span>
@@ -75,12 +75,14 @@
         </div>
       </div>
 
-      <div id="lista" aria-live="polite"></div>
+      <div id="lista"></div>
       <div id="loader" style="display:none"><div class="spinner"></div></div>
       <div style="height:250px"></div>
     </div>
 
+    <!-- FOOTER CONTROLES -->
     <div class="footer-controles">
+
       <div style="display:flex;gap:8px;margin-bottom:20px">
         <button class="btn-small" onclick="exportarCSV()">📊 EXPORTAR</button>
         <button class="btn-small" onclick="document.getElementById('inputFile').click()">📥 IMPORTAR</button>
@@ -88,36 +90,43 @@
         <input type="file" id="inputFile" class="hidden" onchange="importarCSV(event)" />
       </div>
 
-<!-- Botones de copia de seguridad -->
-<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px;">
-  <button id="btnBackupOneDrive" class="btn-gold" onclick="guardarCopiaEnOneDrive()">
-    Guardar copia en OneDrive
-  </button>
-  <button id="btnRestoreOneDrive" class="btn-silver" onclick="restaurarCopiaDeOneDrive()">
-    Restaurar copia de OneDrive
-  </button>
-</div>
-
-      
-      <div class="footer-row">
-        <button class="plus" onclick="abrirGraficos()" aria-label="Ver gráficos"
-                style="width:55px;height:55px;background:var(--gold-metal);font-size:20px">
-          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="black" stroke-width="3">
-            <line x1="18" y1="20" x2="18" y2="10"></line>
-            <line x1="12" y1="20" x2="12" y2="4"></line>
-            <line x1="6" y1="20" x2="6" y2="14"></line>
-          </svg>
-        </button>
-
-        <button class="plus" onclick="abrirFormulario()" aria-label="Nuevo registro">+</button>
-        <div id="balance">0.00 €</div>
+      <!-- OneDrive -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px;">
+        <button id="btnBackupOneDrive" class="btn-gold" onclick="guardarCopiaEnOneDrive()">Guardar copia en OneDrive</button>
+        <button id="btnRestoreOneDrive" class="btn-silver" onclick="restaurarCopiaDeOneDrive()">Restaurar copia de OneDrive</button>
       </div>
+
+      <!-- BALANCE (SEPARADO DEL FOOTER-ROW) -->
+      <div id="balance"
+           style="margin:15px auto 10px auto;
+                  text-align:center;
+                  font-size:28px;
+                  font-weight:900;
+                  background:#000;
+                  padding:10px 20px;
+                  border-radius:14px;
+                  width:max-content;
+                  border:2px solid var(--primary);">
+        0.00 €
+      </div>
+
+      <!-- FOOTER ROW (3 BOTONES EXACTOS) -->
+      <div class="footer-row">
+        <!-- izquierda -->
+        <button class="plus"></button>
+        <!-- centro -->
+        <button class="plus"></button>
+        <!-- derecha -->
+        <button class="plus"></button>
+      </div>
+
     </div>
   </div>
 
-  <!-- Formulario -->
+  <!-- FORMULARIO -->
   <div id="form" class="hidden">
     <div class="topbar" id="tituloForm">NUEVO REGISTRO</div>
+
     <div class="container">
       <div style="display:flex;gap:8px;margin-bottom:8px">
         <select id="origen"></select>
@@ -125,32 +134,45 @@
       </div>
 
       <input type="hidden" id="editId" />
+
       <div style="display:flex;gap:8px;align-items:center">
         <select id="categoria" onchange="manejarNuevo(this,'categoria')"></select>
         <button onclick="borrarElemento('categoria')"
-                style="width:70px;height:68px;border-radius:16px;background:var(--danger);border:none;color:#fff;font-size:24px">🗑️</button>
+                style="width:70px;height:68px;border-radius:16px;background:var(--danger);border:none;color:#fff;font-size:24px">
+          🗑️
+        </button>
       </div>
 
       <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
         <select id="subcategoria" onchange="manejarNuevo(this,'subcategoria')"></select>
         <button onclick="borrarElemento('subcategoria')"
-                style="width:70px;height:68px;border-radius:16px;background:var(--danger);border:none;color:#fff;font-size:24px">🗑️</button>
+                style="width:70px;height:68px;border-radius:16px;background:var(--danger);border:none;color:#fff;font-size:24px">
+          🗑️
+        </button>
       </div>
 
       <input id="importe" type="number" step="0.01" inputmode="decimal" placeholder="0.00 €"
              style="height:70px!important;font-weight:700" />
+
       <textarea id="descripcion" maxlength="200" placeholder="Nota..." style="min-height:100px"></textarea>
 
-      <button onclick="guardar()" style="background:var(--gold-gradient);color:#000;height:70px;width:100%;font-size:22px;margin-top:10px;border:none;font-weight:700;border-radius:16px">GUARDAR</button>
+      <button onclick="guardar()" style="background:var(--gold-gradient);color:#000;height:70px;width:100%;font-size:22px;margin-top:10px;border:none;font-weight:700;border-radius:16px">
+        GUARDAR
+      </button>
+
       <div id="btnEliminarRegistro" class="hidden">
-        <button onclick="eliminarRegistroActual()" style="background:var(--danger);color:#fff;height:60px;width:100%;font-size:18px;margin-top:10px;border:none;font-weight:700;border-radius:16px">ELIMINAR</button>
+        <button onclick="eliminarRegistroActual()" style="background:var(--danger);color:#fff;height:60px;width:100%;font-size:18px;margin-top:10px;border:none;font-weight:700;border-radius:16px">
+          ELIMINAR
+        </button>
       </div>
+
       <button onclick="volver()" class="btn-cancel-plate">CANCELAR</button>
     </div>
   </div>
 
-  <!-- JS (utils primero) -->
-  <script src="./js/utils.js"></script>
-  <script src="./js/main.js"></script>
+  <!-- JS -->
+  ./js/utils.jsscript>
+  ./js/main.jsscript>
+
 </body>
 </html>
