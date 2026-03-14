@@ -2,6 +2,7 @@
    - PIN hasheado (SHA-256) + limitador de intentos (cooldown)
    - Bugfix normalización subcategorías
    - Escape seguro en lista (XSS-safe)
+   - Nueva vista “Gráficos 2” (13 meses, cuadrados arriba/abajo)
    - Mismo UI y utilidades (no cambia la apariencia)
 */
 "use strict";
@@ -33,7 +34,7 @@ let registrosVisibles = 25;
 let filtradosGlobal   = [];
 
 /* ==========================
-   UTILIDADES DE TEXTO
+   UTILIDADES DE TEXTO / ESCAPE
 ========================== */
 const normalizeKey = (s) => (s ?? "")
   .toString().trim().toLowerCase()
@@ -48,7 +49,6 @@ const singularizeWordEs = (w) => {
   if (/[aeiou]s$/.test(w)) return w.slice(0,-1);
   return w;
 };
-
 const canonicalizeLabel = (s) => {
   const raw = normalizeKey(s);
   return raw
@@ -60,23 +60,17 @@ const canonicalizeLabel = (s) => {
     .replace(/\s*\-\s*/g,'-')
     .trim();
 };
-
 const mostrarBonito = (s) => {
   const t = (s ?? '').toString().trim();
   if (!t) return t;
   return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
 };
-
 const buildCanonIndex = (preferida = [], secundaria = []) => {
   const map = new Map();
   const add = (v) => { const k = canonicalizeLabel(v); if (!map.has(k)) map.set(k, v); };
   preferida.forEach(add); secundaria.forEach(add);
   return map;
 };
-
-/* ==========================
-   ESCAPE HTML (para listado)
-========================== */
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c =>
   ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;', "'":'&#39;'}[c])
 );
@@ -97,36 +91,19 @@ const PIN_COOLDOWN_KEY  = 'pinCooldownUntil_v1';
 async function ensureDefaultPinHash() {
   const pinHash = localStorage.getItem(PIN_STORAGE_KEY);
   if (!pinHash) {
-    // PIN por defecto = 7143 (migración automática a hash)
-    const h = await sha256("7143");
+    const h = await sha256("7143"); // mismo PIN por defecto, ahora hasheado
     localStorage.setItem(PIN_STORAGE_KEY, h);
   }
 }
-function getAttempts() {
-  return parseInt(localStorage.getItem(PIN_ATTEMPTS_KEY) || '0', 10);
-}
-function setAttempts(n) {
-  localStorage.setItem(PIN_ATTEMPTS_KEY, String(n));
-}
-function getCooldownUntil() {
-  const v = parseInt(localStorage.getItem(PIN_COOLDOWN_KEY) || '0', 10);
-  return isNaN(v) ? 0 : v;
-}
-function setCooldown(seconds) {
-  const until = Date.now() + seconds * 1000;
-  localStorage.setItem(PIN_COOLDOWN_KEY, String(until));
-}
-function isInCooldown() {
-  const until = getCooldownUntil();
-  const now = Date.now();
-  return now < until ? (until - now) : 0; // ms restantes
-}
+function getAttempts() { return parseInt(localStorage.getItem(PIN_ATTEMPTS_KEY) || '0', 10); }
+function setAttempts(n){ localStorage.setItem(PIN_ATTEMPTS_KEY, String(n)); }
+function getCooldownUntil(){ const v = parseInt(localStorage.getItem(PIN_COOLDOWN_KEY) || '0', 10); return isNaN(v) ? 0 : v; }
+function setCooldown(seconds){ const until = Date.now() + seconds * 1000; localStorage.setItem(PIN_COOLDOWN_KEY, String(until)); }
+function isInCooldown(){ const until = getCooldownUntil(); const now = Date.now(); return now < until ? (until - now) : 0; }
 
 let pinActual = "";
 const updateDots = () => {
-  document.querySelectorAll('.dot').forEach((d, i) => {
-    d.classList.toggle('filled', i < pinActual.length);
-  });
+  document.querySelectorAll('.dot').forEach((d, i) => d.classList.toggle('filled', i < pinActual.length));
 };
 const clearPin = () => { pinActual = ""; updateDots(); };
 
@@ -134,68 +111,35 @@ const unlock = () => {
   const overlay = document.getElementById("authOverlay");
   if (overlay) overlay.style.display = "none";
   const m = document.getElementById("movimientos");
-  if (m) {
-    m.classList.remove("hidden");
-    m.dataset.permiso = "OK";
-  }
+  if (m) { m.classList.remove("hidden"); m.dataset.permiso = "OK"; }
   init();
+  updateFooterButtons();
 };
-
 async function verifyAndUnlock(pinPlain) {
   const remainMs = isInCooldown();
-  if (remainMs > 0) {
-    const s = Math.ceil(remainMs / 1000);
-    alert(`Has superado el número de intentos. Espera ${s} s e inténtalo de nuevo.`);
-    return;
-  }
-  const savedHash = localStorage.getItem(PIN_STORAGE_KEY);
-  if (!savedHash) await ensureDefaultPinHash();
-
+  if (remainMs > 0) { const s = Math.ceil(remainMs / 1000); alert(`Bloqueado temporalmente. Espera ${s} s.`); return; }
+  await ensureDefaultPinHash();
   const currentHash = localStorage.getItem(PIN_STORAGE_KEY);
   const givenHash   = await sha256(pinPlain);
-
   if (givenHash === currentHash) {
-    setAttempts(0);
-    localStorage.removeItem(PIN_COOLDOWN_KEY);
-    unlock();
+    setAttempts(0); localStorage.removeItem(PIN_COOLDOWN_KEY); unlock();
   } else {
-    const prev = getAttempts() + 1;
-    setAttempts(prev);
-    if (prev >= 5) {
-      setCooldown(60); // 60s de bloqueo
-      setAttempts(0);
-      alert("Demasiados intentos fallidos. Bloqueo temporal de 60 segundos.");
-    } else {
-      alert("PIN incorrecto");
-    }
+    const prev = getAttempts() + 1; setAttempts(prev);
+    if (prev >= 5) { setCooldown(60); setAttempts(0); alert("Demasiados intentos fallidos. Bloqueo de 60 s."); }
+    else { alert("PIN incorrecto"); }
   }
 }
-
 const pressPin = async (n) => {
-  if (isInCooldown() > 0) {
-    const s = Math.ceil(isInCooldown() / 1000);
-    alert(`Bloqueado temporalmente. Espera ${s} s.`);
-    return;
-  }
+  if (isInCooldown() > 0) { const s = Math.ceil(isInCooldown() / 1000); alert(`Bloqueado temporalmente. Espera ${s} s.`); return; }
   if (pinActual.length < 4) {
-    pinActual += String(n);
-    updateDots();
-    if (pinActual.length === 4) {
-      const candidate = pinActual;
-      clearPin();
-      await ensureDefaultPinHash();
-      verifyAndUnlock(candidate);
-    }
+    pinActual += String(n); updateDots();
+    if (pinActual.length === 4) { const candidate = pinActual; clearPin(); await ensureDefaultPinHash(); verifyAndUnlock(candidate); }
   }
 };
-
-const biometricAuth = () => {
-  // Mantener UI pero sin desbloquear hasta implementar WebAuthn
-  alert("Biometría no implementada aún.");
-};
+const biometricAuth = () => { alert("Biometría no implementada aún."); };
 
 /* ==========================
-   VISTA LISTA / GRÁFICOS
+   LISTA / GRÁFICOS (originales)
 ========================== */
 const mostrar = () => {
   const movDiv = document.getElementById("movimientos");
@@ -247,8 +191,9 @@ const mostrar = () => {
     const loader = document.getElementById("loader");
     if (loader) loader.style.display = "none";
   }
-};
 
+  updateFooterButtons(); // ajusta botón izq según modo
+};
 const renderizarBarrasGraficos = (f) => {
   const lista = document.getElementById("lista");
   if (!lista) return;
@@ -322,7 +267,6 @@ const llenar = (id, base, extra, pre = "", opts = {}) => {
   }
   if (id !== "origen") s.innerHTML += `<option value="+">+ Añadir nuevo...</option>`;
 };
-
 const abrirFormulario = (id = null) => {
   const f    = document.getElementById("form");
   const mDiv = document.getElementById("movimientos");
@@ -364,10 +308,9 @@ const abrirFormulario = (id = null) => {
   f.classList.remove("hidden");
   mDiv.classList.add("hidden");
 };
-
 const guardar = () => {
   const ids = ["editId","origen","categoria","subcategoria","fecha","descripcion","importe"];
-  // ✅ F I X: clave dinámica correcta [id]: …
+  // CORRECTO: clave dinámica [id]
   const v = ids.reduce((acc, id) => ({ ...acc, [id]: document.getElementById(id)?.value }), {});
   const imp = parseFloat(v.importe);
   if (!v.origen || !v.categoria || !v.subcategoria || isNaN(imp)) {
@@ -394,16 +337,13 @@ const guardar = () => {
   localStorage.setItem('movimientos', JSON.stringify(movimientos));
   volver();
 };
-
 const volver = () => {
-  const form = document.getElementById("form");
+  document.getElementById("form")?.classList.add("hidden");
   const movs = document.getElementById("movimientos");
-  form?.classList.add("hidden");
   movs?.classList.remove("hidden");
   actualizarListas();
   mostrar();
 };
-
 const manejarNuevo = (el, tipo) => {
   if (el.value === "+") {
     let n = prompt(`Nueva ${tipo}:`);
@@ -440,7 +380,6 @@ const manejarNuevo = (el, tipo) => {
     }
   }
 };
-
 const borrarElemento = (tipo) => {
   const select = document.getElementById(tipo);
   const val = select?.value;
@@ -466,30 +405,11 @@ const borrarElemento = (tipo) => {
     }
   }
 };
-
 const abrirGraficos = () => {
   const m = document.getElementById("movimientos");
   if (!m) return;
   m.dataset.modo = (m.dataset.modo === "graficos") ? "lista" : "graficos";
   mostrar();
-};
-
-const resetPagina = () => { registrosVisibles = 25; window.scrollTo(0,0); };
-
-const actualizarListas = () => {
-  const fC = document.getElementById("filtroCat");
-  const fS = document.getElementById("filtroSub");
-  const fO = document.getElementById("filtroOri");
-  if (!fC || !fS || !fO) return;
-
-  fC.innerHTML = '<option value="TODAS">Cat: TODAS</option>';
-  [...new Set([...catBase, ...catExtra, ...NOMINA_CATS])].sort().forEach(c => fC.add(new Option(c, c)));
-
-  fS.innerHTML = '<option value="TODAS">Sub: TODAS</option>';
-  [...new Set([...subMaestra, ...NOMINA_SUBS])].sort().forEach(s => fS.add(new Option(s, s)));
-
-  fO.innerHTML = '<option value="TODOS">Ori: TODOS</option>';
-  origenBase.forEach(o => fO.add(new Option(o, o)));
 };
 
 /* ==========================
@@ -530,7 +450,7 @@ function normalizarListasExistentes(){
 
   movimientos = movimientos.map(m=>{
     const kc = canonicalizeLabel(m.c);
-    const ks = canonicalizeLabel(m.s);
+    the ks = canonicalizeLabel(m.s);
     let c = m.c, s = m.s;
     if (catIndexCanon.has(kc)) c = catIndexCanon.get(kc);
     if (subIndexCanon.has(ks)) s = subIndexCanon.get(ks);
@@ -545,56 +465,24 @@ function normalizarListasExistentes(){
 }
 
 /* ==========================
-   CSV: EXPORTACIÓN (europeo)
+   CSV: EXPORT / IMPORT
 ========================== */
 const exportarCSV = () => {
-  if (!movimientos || movimientos.length === 0) {
-    alert("No hay datos para exportar.");
-    return;
-  }
+  if (!movimientos || movimientos.length === 0) { alert("No hay datos para exportar."); return; }
   const SEP = ";";
-  const toESDate = (iso) => {
-    const [y,m,d] = (iso || "").split("-");
-    return (y && m && d) ? `${d}/${m}/${y}` : (iso || "");
-  };
-  const toEuro = (n) => {
-    const val = (typeof n === "number" ? n : parseFloat(n || 0));
-    const s = Number.isFinite(val) ? val.toString() : "0";
-    return s.includes(".") ? s.replace(".", ",") : s;
-  };
-  const csvCell = (v) => {
-    let t = (v ?? "").toString().replace(/\r?\n/g, "⏎");
-    if (/[;"\n]/.test(t)) t = '"' + t.replace(/"/g,'""') + '"';
-    return t;
-  };
+  const toESDate = (iso) => { const [y,m,d] = (iso || "").split("-"); return (y && m && d) ? `${d}/${m}/${y}` : (iso || ""); };
+  const toEuro = (n) => { const val = (typeof n === "number" ? n : parseFloat(n || 0)); const s = Number.isFinite(val) ? val.toString() : "0"; return s.includes(".") ? s.replace(".", ",") : s; };
+  const csvCell = (v) => { let t = (v ?? "").toString().replace(/\r?\n/g, "⏎"); if (/[;"\n]/.test(t)) t = '"' + t.replace(/"/g,'""') + '"'; return t; };
   const headers = ["Fecha","Origen","Categoria","Subcategoria","Importe","Descripcion"].join(SEP);
-  const rows = movimientos.map(m =>
-    [
-      toESDate(m.f),
-      m.o || "",
-      m.c || "",
-      m.s || "",
-      toEuro(m.imp),
-      (m.d ?? "").trim()
-    ].map(csvCell).join(SEP)
-  );
+  const rows = movimientos.map(m => [ toESDate(m.f), m.o || "", m.c || "", m.s || "", toEuro(m.imp), (m.d ?? "").trim() ].map(csvCell).join(SEP));
   const csv = [headers, ...rows].join("\n");
-  const hoy = new Date();
-  const dd = String(hoy.getDate()).padStart(2,"0");
-  const mm = String(hoy.getMonth()+1).padStart(2,"0");
-  const yyyy = hoy.getFullYear();
+  const hoy = new Date(); const dd = String(hoy.getDate()).padStart(2,"0"); const mm = String(hoy.getMonth()+1).padStart(2,"0"); const yyyy = hoy.getFullYear();
   const fileName = `mis_gastos_${dd}${mm}${yyyy}.csv`;
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url; a.download = fileName;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  a.href = url; a.download = fileName; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
 };
-
-/* ==========================
-   CSV: IMPORTACIÓN
-========================== */
 const importarCSV = (e) => {
   const file = e.target.files && e.target.files[0];
   if (!file) return;
@@ -606,29 +494,15 @@ const importarCSV = (e) => {
       if (!lines.length) { alert("El archivo está vacío."); return; }
 
       const header = lines[0];
-      const counts = {
-        tab:   (header.match(/\t/g)   || []).length,
-        semi:  (header.match(/;/g)    || []).length,
-        comma: (header.match(/,/g)    || []).length
-      };
-      let delim = "\t";
-      if (counts.tab >= counts.semi && counts.tab >= counts.comma) delim = "\t";
-      else if (counts.semi >= counts.comma) delim = ";";
-      else delim = ",";
+      const counts = { tab:(header.match(/\t/g)||[]).length, semi:(header.match(/;/g)||[]).length, comma:(header.match(/,/g)||[]).length };
+      let delim = "\t"; if (counts.tab >= counts.semi && counts.tab >= counts.comma) delim = "\t"; else if (counts.semi >= counts.comma) delim = ";"; else delim = ",";
 
-      const parseLine = (line) => {
-        const out = []; let cur = "", inQ = false;
-        for (let i=0;i<line.length;i++){
-          const ch = line[i];
-          if (ch === '"'){
-            if (inQ && line[i+1] === '"'){ cur += '"'; i++; }
-            else inQ = !inQ;
-          } else if (ch === delim && !inQ) { out.push(cur); cur = ""; }
+      const parseLine = (line) => { const out = []; let cur = "", inQ = false;
+        for (let i=0;i<line.length;i++){ const ch = line[i];
+          if (ch === '"'){ if (inQ && line[i+1] === '"'){ cur += '"'; i++; } else inQ = !inQ; }
+          else if (ch === delim && !inQ) { out.push(cur); cur = ""; }
           else { cur += ch; }
-        }
-        out.push(cur);
-        return out;
-      };
+        } out.push(cur); return out; };
 
       const cols = parseLine(header).map(h=>h.trim().toLowerCase());
       const idx = {
@@ -643,59 +517,29 @@ const importarCSV = (e) => {
       const missing  = required.filter(k => idx[k] < 0);
       if (missing.length) { alert("Faltan columnas: " + missing.join(", ")); return; }
 
-      const toISODate = (ddmmyyyy) => {
-        const m = ddmmyyyy.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-        if (!m) return ddmmyyyy;
-        return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
-      };
-      const parseEuroNumber = (s) => {
-        let t = (s || '').toString().trim();
-        // miles europeo
-        t = t.replace(/\.(?=\d{3}(?:\D|$))/g, '');
-        // decimal europeo
-        t = t.replace(',', '.');
-        const n = parseFloat(t);
-        return isNaN(n) ? 0 : n;
-      };
-      const cleanText = (s) => {
-        if (!s) return "";
-        let t = s.replace(/\\\"{2,}/g, '"').trim();
-        if (t.startsWith('"') && t.endsWith('"')) t = t.slice(1,-1);
-        return t.trim();
-      };
+      const toISODate = (ddmmyyyy) => { const m = ddmmyyyy.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); if (!m) return ddmmyyyy; return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`; };
+      const parseEuroNumber = (s) => { let t = (s || '').toString().trim(); t = t.replace(/\.(?=\d{3}(?:\D|$))/g, ''); t = t.replace(',', '.'); const n = parseFloat(t); return isNaN(n) ? 0 : n; };
+      const cleanText = (s) => { if (!s) return ""; let t = s.replace(/\\"{2,}/g, '"').trim(); if (t.startsWith('"') && t.endsWith('"')) t = t.slice(1,-1); return t.trim(); };
 
       const catIndexCanon = buildCanonIndex([...catBase, ...catExtra, ...NOMINA_CATS], []);
       const subIndexCanon = buildCanonIndex([...subMaestra, ...NOMINA_SUBS], []);
       const nuevos = [];
 
       for (let i = 1; i < lines.length; i++) {
-        const arr = parseLine(lines[i]);
-        if (arr.every(v => (v || '').trim() === '')) continue;
+        const arr = parseLine(lines[i]); if (arr.every(v => (v || '').trim() === '')) continue;
 
-        const rawFecha = arr[idx.fecha] ?? '';
-        const rawOrigen = arr[idx.origen] ?? '';
-        const rawCat = arr[idx.categoria] ?? '';
-        const rawSub = arr[idx.subcategoria] ?? '';
-        const rawImp = arr[idx.importe] ?? '';
-        const rawDesc = (idx.descripcion >= 0 ? arr[idx.descripcion] : '') ?? '';
+        const f = toISODate(cleanText(arr[idx.fecha] ?? ''));
+        let o = cleanText(arr[idx.origen] ?? '');
+        let c = mostrarBonito(cleanText(arr[idx.categoria] ?? ''));
+        let s = mostrarBonito(cleanText(arr[idx.subcategoria] ?? ''));
+        let d = cleanText((idx.descripcion >= 0 ? arr[idx.descripcion] : '') ?? '');
+        const oLow = o.toLowerCase(); if (oLow.startsWith('nom')) o = 'Nómina'; else if (oLow.startsWith('gas')) o = 'Gasto'; else if (oLow.startsWith('ing')) o = 'Ingreso';
 
-        const f = toISODate(cleanText(rawFecha));
-        let o = cleanText(rawOrigen);
-        let c = mostrarBonito(cleanText(rawCat));
-        let s = mostrarBonito(cleanText(rawSub));
-        let d = cleanText(rawDesc);
-
-        const oLow = o.toLowerCase();
-        if (oLow.startsWith('nom')) o = 'Nómina';
-        else if (oLow.startsWith('gas')) o = 'Gasto';
-        else if (oLow.startsWith('ing')) o = 'Ingreso';
-
-        const keyC = canonicalizeLabel(c);
-        const keyS = canonicalizeLabel(s);
+        const keyC = canonicalizeLabel(c); const keyS = canonicalizeLabel(s);
         if (catIndexCanon.has(keyC)) c = catIndexCanon.get(keyC);
         if (subIndexCanon.has(keyS)) s = subIndexCanon.get(keyS);
 
-        let imp = parseEuroNumber(rawImp);
+        let imp = parseEuroNumber(arr[idx.importe] ?? '');
         if (o === 'Gasto' && imp > 0) imp = -Math.abs(imp);
         if (o !== 'Gasto' && imp < 0) imp = Math.abs(imp);
 
@@ -704,14 +548,11 @@ const importarCSV = (e) => {
         nuevos.push(mov);
       }
 
-      // Añadir nuevas categorías/subcategorías (sin duplicados canónicos)
+      // Inserta valores nuevos (evita duplicados canónicos)
       const addIfNewCanon = (list, storeKey, value) => {
         const k = canonicalizeLabel(value);
         const exists = list.some(v => canonicalizeLabel(v) === k);
-        if (!exists) {
-          list.push(value);
-          localStorage.setItem(storeKey, JSON.stringify(list));
-        }
+        if (!exists) { list.push(value); localStorage.setItem(storeKey, JSON.stringify(list)); }
       };
       nuevos.forEach(m=>{
         if (![...catBase, ...catExtra, ...NOMINA_CATS].some(v => canonicalizeLabel(v) === canonicalizeLabel(m.c))){
@@ -725,9 +566,7 @@ const importarCSV = (e) => {
       movimientos = [...movimientos, ...nuevos].sort((a,b)=> new Date(b.f)-new Date(a.f));
       localStorage.setItem('movimientos', JSON.stringify(movimientos));
 
-      actualizarListas();
-      resetPagina();
-      mostrar();
+      actualizarListas(); resetPagina(); mostrar();
       alert(`Importación completa: ${nuevos.length} registros añadidos.`);
     } catch (err) {
       console.error(err);
@@ -757,12 +596,10 @@ const init = () => {
     for (let a = 2020; a <= 2030; a++) fA.add(new Option(a, a));
     fA.value = hoy.getFullYear();
   }
-  // Limpieza retroactiva (Listas + Movimientos)
   normalizarListasExistentes();
   actualizarListas();
   mostrar();
 };
-
 const ejecutarBackupRotativo = () => { /* opcional */ };
 const resetTotal = () => confirm("¿BORRAR TODO?") && (localStorage.clear(), location.reload());
 
@@ -785,7 +622,110 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /* ==========================
-   EXPOSE: Compatibilidad con on* del HTML
+   GRÁFICOS 2 — lógica
+========================== */
+// Icono rojo/verde para el botón “Gráficos 2”
+function iconGraficos2SVG(){
+  return `
+    <svg viewBox="0 0 64 64" width="28" height="28" xmlns="http://www.w3.org/2000/svg">
+      <rect x="10" y="34" width="10" height="18" fill="#22c55e" rx="2"/>
+      <rect x="26" y="18" width="10" height="34" fill="#ef4444" rx="2"/>
+      <rect x="42" y="28" width="10" height="24" fill="#22c55e" rx="2"/>
+      <polyline points="8,32 56,32" stroke="#d4af37" stroke-dasharray="3,3" stroke-width="2" fill="none"/>
+    </svg>
+  `;
+}
+// Cambia el botón izquierdo según el modo actual
+function updateFooterButtons(){
+  const m = document.getElementById("movimientos");
+  const btn = document.getElementById("btnGraficos");
+  if (!m || !btn) return;
+
+  if (m.dataset.modo === "graficos") {
+    // En la página de gráficos: sustituir por “Gráficos 2”
+    btn.title = "Gráficos 2";
+    btn.setAttribute("aria-label", "Gráficos 2");
+    btn.onclick = abrirGraficos2;
+    btn.innerHTML = iconGraficos2SVG();
+  } else {
+    // En lista: botón vuelve a ser “Gráficos”
+    btn.title = "Gráficos";
+    btn.setAttribute("aria-label", "Ver gráficos");
+    btn.onclick = abrirGraficos;
+    btn.innerHTML = `
+      <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="black" stroke-width="3">
+        <line x1="18" y1="20" x2="18" y2="10"></line>
+        <line x1="12" y1="20" x2="12" y2="4"></line>
+        <line x1="6"  y1="20" x2="6"  y2="14"></line>
+      </svg>`;
+  }
+}
+// Devuelve array de { label, y, total } para los últimos 13 meses (incluye mes actual)
+function computeUltimos13Meses(){
+  const out = [];
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  for (let i=12; i>=0; i--){
+    const d = new Date(start.getFullYear(), start.getMonth() - i, 1);
+    const y = d.getFullYear();
+    const m = d.getMonth(); // 0..11
+    const label = mesesLabel[m].slice(0,3); // abreviado
+    const key = `${y}-${String(m+1).padStart(2,'0')}`;
+    const totalMes = movimientos
+      .filter(x => (x.f || '').startsWith(key))
+      .reduce((acc,x) => acc + (Number(x.imp)||0), 0);
+    out.push({ label, y, m, total: totalMes });
+  }
+  return out;
+}
+// Mapea valor positivo a color de umbral (como tu pantalla de gráficos)
+function colorPorUmbralPositivo(valAbs){
+  if (valAbs <= 50)  return 'g2-blue';
+  if (valAbs <= 200) return 'g2-green';
+  if (valAbs <= 500) return 'g2-amber';
+  return 'g2-red';
+}
+function renderizarGraficos2(){
+  const el = document.getElementById('g2Wrapper');
+  if (!el) return;
+  const data = computeUltimos13Meses();
+
+  const cols = data.map(d => {
+    const pos = d.total >= 0;
+    const clsColor = pos ? colorPorUmbralPositivo(Math.abs(d.total)) : 'g2-red';
+    const clsPos   = pos ? 'up' : 'down';
+    return `
+      <div class="g2-col">
+        <div class="g2-square ${clsPos} ${clsColor}" title="${d.label} ${d.y}: ${d.total.toFixed(2)} €"></div>
+        <div class="g2-label">${d.label}</div>
+      </div>
+    `;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="g2-title">Evolución últimos 13 meses</div>
+    <div class="g2-axis"></div>
+    <div class="g2-grid">${cols}</div>
+  `;
+}
+function abrirGraficos2(){
+  // Muestra la nueva pantalla
+  document.getElementById('movimientos')?.classList.add('hidden');
+  const g2 = document.getElementById('graficos2');
+  g2?.classList.remove('hidden');
+  renderizarGraficos2();
+}
+function volverAGraficos(){
+  document.getElementById('graficos2')?.classList.add('hidden');
+  const m = document.getElementById('movimientos');
+  if (!m) return;
+  m.classList.remove('hidden');
+  m.dataset.modo = 'graficos';
+  mostrar();
+}
+
+/* ==========================
+   EXPOSE: Compatibilidad on* del HTML
 ========================== */
 window.pressPin = pressPin;
 window.clearPin = clearPin;
@@ -793,7 +733,7 @@ window.biometricAuth = biometricAuth;
 
 window.mostrar = mostrar;
 window.abrirGraficos = abrirGraficos;
-window.resetPagina = resetPagina;
+window.resetPagina = () => { registrosVisibles = 25; window.scrollTo(0,0); };
 
 window.abrirFormulario = abrirFormulario;
 window.guardar = guardar;
@@ -812,4 +752,6 @@ window.eliminarRegistroActual = function(){
     volver();
   }
 };
-window.resetTotal = resetTotal;
+// Para Gráficos 2
+window.abrirGraficos2 = abrirGraficos2;
+window.volverAGraficos = volverAGraficos;
