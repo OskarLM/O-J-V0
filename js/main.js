@@ -38,15 +38,8 @@ async function ensureDefaultPinHash() {
 }
 
 /* ==========================
-   UTILIDADES DE NORMALIZACIÓN
+   UTILIDADES / NORMALIZACIÓN
 ========================== */
-function esc(s){
-  const map = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
-  return (s ?? '').toString().replace(/[&<>"']/g, ch => map[ch]);
-}
-
-
-
 const normalizeKey = (s) => (s ?? "")
   .toString().trim().toLowerCase()
   .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
@@ -82,6 +75,11 @@ const buildCanonIndex = (preferida=[], secundaria=[]) => {
   preferida.forEach(add); secundaria.forEach(add);
   return map;
 };
+// Escape HTML
+function esc(s){
+  const map = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
+  return (s ?? '').toString().replace(/[&<>"']/g, ch => map[ch]);
+}
 
 /* ==========================
    SEGURIDAD (PIN + Biometría)
@@ -275,20 +273,20 @@ function mostrar() {
   if (modo === "graficos") {
     // ← Atrás
     if (btnLeft){ btnLeft.innerHTML = iconBack(); btnLeft.onclick = () => setModo("lista"); }
-    // ○ Casa
+    // ○ Casa (centro)
     if (btnCenter){
       btnCenter.innerHTML = iconCasa();
       btnCenter.classList.add("btn-house-anim");
       btnCenter.onclick = () => { toggleCasa(); aplicarEstadoCasa(); };
       aplicarEstadoCasa();
     }
-    // → Gráficos 2
+    // → Gráficos 2 (derecha)
     if (btnRight){ btnRight.innerHTML = iconGraph2(); btnRight.onclick = () => setModo("graficos2"); }
 
   } else if (modo === "graficos2") {
     // ← Atrás
     if (btnLeft){ btnLeft.innerHTML = iconBack(); btnLeft.onclick = () => setModo("graficos"); }
-    // ○ Casa
+    // ○ Casa (centro)
     if (btnCenter){
       btnCenter.innerHTML = iconCasa();
       btnCenter.classList.add("btn-house-anim");
@@ -310,9 +308,8 @@ function mostrar() {
   // Render contenido
   const listaDiv = document.getElementById("lista");
   if (modo === "graficos" || modo === "graficos2") {
-    // Barra superior de herramientas (ya no contiene Casa; Casa está en footer)
-    listaDiv.innerHTML = ""; // limpio zona
-
+    // (Casa está en footer) → limpiamos la zona superior
+    listaDiv.innerHTML = "";
     if (modo === "graficos") {
       renderizarBarrasGraficos((fs[0] === "TODOS") ? 12 : 1);
     } else {
@@ -342,7 +339,8 @@ function mostrar() {
 ========================== */
 function renderizarBarrasGraficos(f) {
   const lista = document.getElementById("lista");
-  const filtroCat = document.getElementById("filtroCat")?.value || "TODAS";
+  const elFC = document.getElementById("filtroCat");
+  const filtroCat = (elFC && elFC.value) || "TODAS";
 
   let fuente = filtradosGlobal.slice();
   if (hideCasa) fuente = fuente.filter(m => !isCasaCategory(m.c));
@@ -399,7 +397,7 @@ function renderizarBarrasGraficos(f) {
 
 function handleGraficoBarClick(label){
   const selCat = document.getElementById('filtroCat');
-  const actual = selCat?.value || 'TODAS';
+  const actual = (selCat && selCat.value) || 'TODAS';
   if (actual === 'TODAS') {
     if (selCat) selCat.value = label;
     resetPagina(); mostrar();
@@ -422,7 +420,8 @@ function abrirDetalleMovs(categoria, subcategoria){
         <div class="premium-title" style="text-align:center">${esc(categoria)} / ${esc(subcategoria)}</div>
         <div style="font-weight:900;color:var(--primary);text-align:center;margin-bottom:10px">Total: ${total.toFixed(2)} €</div>
         <div id="detalleLista">
-          ${ lista.length
+          ${
+            lista.length
               ? lista.map(m => `
                   <div class="card" style="margin:10px 0;border-left-color:var(--danger)">
                     <div class="meta">${esc(m.f.split("-").reverse().join("/"))} • ${esc(m.o)}</div>
@@ -602,12 +601,11 @@ const abrirFormulario = (id = null) => {
 
 const guardar = () => {
   const ids = ["editId","origen","categoria","subcategoria","fecha","descripcion","importe"];
-  // FIX compatible (evita Unexpected token '.')
-  // ✅ Correcto: clave computada [id] + compatibilidad (sin optional chaining)
-const v = ids.reduce((acc,id)=>({ 
-  ...acc, 
-  [id]: (document.getElementById(id) ? document.getElementById(id).value : "") 
-}),{});
+  // ✅ FIX: clave computada [id] (evita Unexpected token '(')
+  const v = ids.reduce((acc,id)=>({
+    ...acc,
+    [id]: (document.getElementById(id) ? document.getElementById(id).value : "")
+  }),{});
   const imp = parseFloat(v.importe);
   if (!v.origen || !v.categoria || !v.subcategoria || isNaN(imp)) return alert("Faltan datos");
 
@@ -808,7 +806,7 @@ const exportarCSV = () => {
   const csv = [headers, ...rows].join("\n");
   const hoy = new Date(), dd=String(hoy.getDate()).padStart(2,"0"), mm=String(hoy.getMonth()+1).padStart(2,"0"), yyyy=hoy.getFullYear();
   const fileName = `mis_gastos_${dd}${mm}${yyyy}.csv`;
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const blob = new Blob([csv], { type: "textharset=utf-8;" });
   const url = URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=fileName;
   document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
 };
@@ -944,6 +942,7 @@ const importarCSV = (e) => {
     document.getElementById('btn_cancel_nom').onclick=()=>{ document.getElementById("origen").value="Gasto";
       llenar('categoria',catBase,catExtra,"",{origenActual:"Gasto"}); llenar('subcategoria',subMaestra,[], "",{origenActual:"Gasto"}); close(); };
   };
+
   document.addEventListener('change',(e)=>{
     if(e.target.id === 'origen'){
       const o = e.target.value;
@@ -987,7 +986,7 @@ async function getAesKeyFromPin(){
   return await crypto.subtle.importKey('raw', keyBytes, 'AES-GCM', false, ['encrypt','decrypt']);
 }
 function buildBackupObject(){
-  return { meta:{ createdAt:new Date().toISOString(), app:"mis-gastos", version:"V1.0.23" },
+  return { meta:{ createdAt:new Date().toISOString(), app:"mis-gastos", version:"V1.0.24" },
            datos:{ movimientos, catExtra, subMaestra } };
 }
 async function encryptBackup(obj){
