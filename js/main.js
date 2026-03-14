@@ -369,6 +369,10 @@ const renderizarBarrasGraficos = (f) => {
 function renderizarGraficos2() {
   const lista = document.getElementById("lista");
 
+  // Limpia un render previo (si lo hubiera) dejando la toolbar "Casa"
+  const oldChart = lista.querySelector('.g2-wrap');
+  if (oldChart) oldChart.remove();
+
   // 1) Filtros: usar Ori/Cat/Sub; ignorar Mes/Año para 13 meses siempre
   const fs = ["filtroMes","filtroAño","filtroCat","filtroSub","filtroOri"]
     .map(id => document.getElementById(id).value);
@@ -410,13 +414,13 @@ function renderizarGraficos2() {
   const maxDespl = Math.max(mitad - 8, 40);   // margen para redondeos y labels
   const minBar = 4;                   // altura mínima visible
 
-  // Colores para positivos (igual que Gráficos 1)
-  const colorPositivo = (v) => {
-    const abs = Math.abs(v);
-    if (abs <= 50)  return "var(--electric-blue)";
-    if (abs <= 200) return "var(--success)";
-    if (abs <= 500) return "var(--warning)";
-    return "var(--danger)";
+  // === COLORES ALINEADOS CON TUS NUEVOS UMBRALES (BALANCE) ===
+  // t < 0 → danger | 0..250 → warning | 250.01..750 → success | >750 → electric-blue
+  const colorPorMes = (t) => {
+    if (t < 0) return "var(--danger)";
+    if (t <= 250) return "var(--warning)";
+    if (t <= 750) return "var(--success)";
+    return "var(--electric-blue)";
   };
 
   const mesesCorta = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
@@ -429,19 +433,20 @@ function renderizarGraficos2() {
 
   // 6) Render: columnas + tooltip
   let html = `
-    <h2 style="color:var(--primary);font-size:18px;text-align:center">EVOLUCIÓN (13 MESES)</h2>
     <div class="g2-wrap">
       <div class="g2-chart">
         <div class="g2-baseline"></div>
   `;
 
   for (const m of meses){
-    const v   = sumaMes.get(m.key) || 0;       // valor del mes
+    const v   = sumaMes.get(m.key) || 0;       // valor del mes (balance mensual)
     const abs = Math.abs(v);
     const h   = Math.max(minBar, (abs / maxAbs) * maxDespl); // altura de la barra
     const pos = v >= 0;
 
-    const color = pos ? colorPositivo(v) : "var(--danger)";
+    // Color según los nuevos criterios
+    const color = colorPorMes(v);
+
     const mesIdx = new Date(m.key + "-01T00:00:00").getMonth();
     const label  = mesesCorta[mesIdx];
 
@@ -459,11 +464,13 @@ function renderizarGraficos2() {
   }
 
   html += `</div></div>`;
-  lista.innerHTML += html;
+
+  // Añadimos debajo de la toolbar "Casa" (que ya pintó mostrar())
+  lista.insertAdjacentHTML('beforeend', html);
 
   // 7) Animación de altura: de 0px → target (data-h)
   requestAnimationFrame(()=>{
-    document.querySelectorAll('.g2-chart .g2-bar').forEach(el=>{
+    lista.querySelectorAll('.g2-chart .g2-bar').forEach(el=>{
       const target = parseFloat(el.dataset.h) || 0;
       el.style.height = `${target}px`;
     });
@@ -473,18 +480,14 @@ function renderizarGraficos2() {
   const chart = lista.querySelector('.g2-chart');
   if (!chart) return;
 
-  // Evitar múltiples bindings en re-render
   if (!chart.dataset.tipBound){
     chart.addEventListener('click', (ev)=>{
       const col = ev.target.closest('.g2-col');
       if (!col) return;
-      // Cerrar otras
       chart.querySelectorAll('.g2-col.show-tip').forEach(c => { if (c!==col) c.classList.remove('show-tip'); });
-      // Alternar actual
       col.classList.toggle('show-tip');
     });
 
-    // Cerrar al hacer tap fuera del gráfico
     document.addEventListener('click', (ev)=>{
       if (!chart.contains(ev.target)) {
         chart.querySelectorAll('.g2-col.show-tip').forEach(c => c.classList.remove('show-tip'));
