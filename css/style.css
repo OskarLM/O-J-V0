@@ -1,139 +1,225 @@
-:root{
-  --primary:#d4af37; --success:#22c55e; --danger:#ef4444; --warning:#f97316; --electric-blue:#00f2ff;
-  --bg:#0b0f1a; --card-bg:rgba(30,41,59,.7); --text:#f8fafc;
+/* ==========================
+   Variables de tema
+========================== */
+:root {
+  --primary:#d4af37;
+  --success:#22c55e;
+  --danger:#ef4444;
+  --warning:#f97316;
+  --electric-blue:#00f2ff;
+
+  --bg:#0b0f1a;
+  --card-bg:rgba(30,41,59,.7);
+  --text:#f8fafc;
+
   --gold-gradient:linear-gradient(45deg,#bf953f,#fcf6ba,#b38728,#fbf5b7,#aa771c);
   --pink-metal:linear-gradient(45deg,#a00050,#ff1493,#ff85c1,#ff1493,#a00050);
-  --gold-metal:linear-gradient(45deg,#8a6d3b,#d4af37,#fcf6ba,#d4af37,#8a6d3b)
+  --gold-metal:linear-gradient(45deg,#8a6d3b,#d4af37,#fcf6ba,#d4af37,#8a6d3b);
 }
-*{box-sizing:border-box}
-body{font-family:'Segoe UI',sans-serif;background:var(--bg);color:var(--text);margin:0;overflow-x:hidden;-webkit-tap-highlight-color:transparent}
-.background-icon{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:30vw;font-weight:900;background:var(--gold-gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;opacity:.1;z-index:-1;pointer-events:none}
-.topbar{background:rgba(30,41,59,.95);backdrop-filter:blur(10px);padding:20px;font-size:15px;font-weight:700;text-align:center;border-bottom:1px solid var(--primary);color:var(--primary);position:sticky;top:0;z-index:1000}
-.container{padding:20px;position:relative;z-index:1}
-.card{background:var(--card-bg);padding:16px;margin:12px 0;border-radius:16px;box-shadow:0 4px 15px rgba(0,0,0,.3);position:relative;border-left:5px solid var(--primary);backdrop-filter:blur(8px)}
-.card b{font-size:14px;color:#fff;display:block}
-.card .meta{font-size:11px;color:var(--primary);font-weight:700;margin-bottom:4px}
-.card .monto{position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:16px;font-weight:800}
 
-.filtros-wrapper{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;background:var(--card-bg);padding:12px;border-radius:20px;border:1px solid rgba(212,175,55,.3);margin-bottom:20px}
+/* ==========================
+   Base
+========================== */
+body {
+  font-family:'Segoe UI',sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  margin:0;
+  overflow-x:hidden;
+  -webkit-tap-highlight-color:transparent;
+}
+.hidden { display:none !important; }
+
+/* ==========================
+   Fondo y topbar
+========================== */
+.background-icon{
+  position:fixed;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  font-size:30vw;font-weight:900;
+  background:var(--gold-gradient);
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  opacity:.1;z-index:-1;pointer-events:none;
+}
+.topbar{
+  background:rgba(30,41,59,.95);
+  backdrop-filter:blur(10px);
+  padding:20px;font-size:15px;font-weight:700;text-align:center;
+  border-bottom:1px solid var(--primary);color:var(--primary);
+  position:sticky;top:0;z-index:1000;
+}
+.container{ padding:20px; position:relative; z-index:1; }
+
+/* ==========================
+   Tarjetas y textos
+========================== */
+.card{
+  background:var(--card-bg);
+  padding:16px;margin:12px 0;border-radius:16px;
+  box-shadow:0 4px 15px rgba(0,0,0,.3);
+  position:relative;border-left:5px solid var(--primary);
+  backdrop-filter:blur(8px);
+}
+.card b{ font-size:14px;color:#fff;display:block; }
+.card .meta{ font-size:11px;color:var(--primary);font-weight:700;margin-bottom:4px; }
+.card .monto{
+  position:absolute;right:16px;top:50%;transform:translateY(-50%);
+  font-size:16px;font-weight:800;
+}
+
+/* ==========================
+   Filtros grandes (UI)
+========================== */
+.filtros-wrapper{
+  display:grid;grid-template-columns:repeat(6,1fr);gap:8px;
+  background:var(--card-bg);padding:12px;border-radius:20px;
+  border:1px solid rgba(212,175,55,.3);margin-bottom:20px;
+}
+.filtro-item span{
+  font-size:13px!important;font-weight:900!important;
+  letter-spacing:1px!important;margin-bottom:5px!important;
+  display:inline-block!important;
+}
+.filtro-item select{
+  font-size:16px!important;height:50px!important;
+  padding:5px 10px!important;border-radius:14px!important;
+  font-weight:bold!important;
+}
 .filtros-wrapper .filtro-item:nth-child(1),
 .filtros-wrapper .filtro-item:nth-child(2),
-.filtros-wrapper .filtro-item:nth-child(3){grid-column:span 2}
+.filtros-wrapper .filtro-item:nth-child(3){ grid-column:span 2; }
 .filtros-wrapper .filtro-item:nth-child(4),
-.filtros-wrapper .filtro-item:nth-child(5){grid-column:span 3;display:flex;flex-direction:column}
+.filtros-wrapper .filtro-item:nth-child(5){
+  grid-column:span 3;display:flex;flex-direction:column;
+}
 
-.footer-controles{position:fixed;bottom:0;left:0;width:100%;background:rgba(15,23,42,.98);backdrop-filter:blur(15px);padding:15px 20px 35px;border-top:2px solid var(--primary);z-index:1100;border-radius:24px 24px 0 0}
-.footer-row{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;width:100%}
-.plus{background:var(--gold-gradient);width:65px;height:65px;border-radius:50%;font-size:35px;color:#000;display:flex;align-items:center;justify-content:center;border:none;font-weight:700;cursor:pointer}
-#balance{font-size:24px;font-weight:900;padding:10px 15px;background:#000;border-radius:14px;border:1px solid var(--primary);text-align:center;justify-self:end;min-width:110px}
+input,select,textarea{
+  width:100%;padding:12px;margin:8px 0;font-size:13px;
+  border-radius:12px;border:1px solid #334155;background:rgba(15,23,42,.9);
+  color:#fff;box-sizing:border-box;
+}
+#form input,#form select,#form textarea{
+  font-size:22px!important;height:auto!important;padding:14px!important;
+}
 
-input,select,textarea{width:100%;padding:12px;margin:8px 0;font-size:13px;border-radius:12px;border:1px solid #334155;background:rgba(15,23,42,.9);color:#fff}
-#form input,#form select,#form textarea{font-size:22px!important;height:auto!important;padding:14px!important}
+/* ==========================
+   Footer / botones
+========================== */
+.footer-controles{
+  position:fixed;bottom:0;left:0;width:100%;
+  background:rgba(15,23,42,.98);backdrop-filter:blur(15px);
+  padding:15px 20px 35px;border-top:2px solid var(--primary);
+  z-index:1100;border-radius:24px 24px 0 0;box-sizing:border-box;
+}
+.footer-row{
+  display:grid;grid-template-columns:1fr auto 1fr;align-items:center;width:100%;
+}
+.btn-small{
+  padding:10px;flex:1;font-size:10px;background:#222;color:var(--primary);
+  border-radius:8px;border:1px solid var(--primary);font-weight:700;
+}
+.plus{
+  background:var(--gold-gradient);width:65px;height:65px;border-radius:50%;
+  font-size:35px;color:#000;display:flex;align-items:center;justify-content:center;
+  border:none;font-weight:700;cursor:pointer;
+}
+#balance{
+  font-size:24px;font-weight:900;padding:10px 15px;background:#000;border-radius:14px;
+  border:1px solid var(--primary);text-align:center;justify-self:end;min-width:110px;
+}
 
-.btn-small{padding:10px;flex:1;font-size:10px;background:#222;color:var(--primary);border-radius:8px;border:1px solid var(--primary);font-weight:700}
-.hidden{display:none!important}
+/* ==========================
+   Overlay PIN (auth)
+========================== */
+.popup-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.95);display:flex;
+  align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(15px);
+}
+.popup-content{
+  background:#1e293b;padding:25px;border-radius:24px;text-align:center;width:85%;
+  max-width:320px;border:2px solid var(--primary);
+}
+.pin-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:20px;
+}
+.btn-pin{
+  background:rgba(255,255,255,.05);border:1px solid var(--primary);color:#fff;
+  padding:15px;border-radius:12px;font-size:20px;font-weight:700;
+}
+.pin-dots{ display:flex;justify-content:center;gap:10px;margin-bottom:20px; }
+.dot{ width:12px;height:12px;border-radius:50%;border:2px solid var(--primary); }
+.dot.filled{ background:var(--primary); }
 
-.popup-overlay{position:fixed;inset:0;background:rgba(0,0,0,.95);display:flex;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(15px)}
-.popup-content{background:#1e293b;padding:25px;border-radius:24px;text-align:center;width:85%;max-width:320px;border:2px solid var(--primary)}
-.pin-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:20px}
-.btn-pin{background:rgba(255,255,255,.05);border:1px solid var(--primary);color:#fff;padding:15px;border-radius:12px;font-size:20px;font-weight:700}
-.pin-dots{display:flex;justify-content:center;gap:10px;margin-bottom:20px}
-.dot{width:12px;height:12px;border-radius:50%;border:2px solid var(--primary)}
-.dot.filled{background:var(--primary)}
-.spinner{width:30px;height:30px;border:3px solid rgba(212,175,55,.1);border-left-color:var(--primary);border-radius:50%;animation:spin 1s linear infinite;margin:10px auto}
-@keyframes spin{to{transform:rotate(360deg)}}
+/* ==========================
+   Spinner
+========================== */
+.spinner{
+  width:30px;height:30px;border:3px solid rgba(212,175,55,.1);
+  border-left-color:var(--primary);border-radius:50%;
+  animation:spin 1s linear infinite;margin:10px auto;
+}
+@keyframes spin{ to{ transform:rotate(360deg) } }
 
-/* Botón cancelar “plata” */
-.btn-cancel-plate{
+/* ==========================
+   Estilo botón CANCELAR (plata)
+========================== */
+#form button[onclick="volver()"]{
   background:linear-gradient(45deg,#757575,#c0c0c0,#ffffff,#c0c0c0,#757575)!important;
   color:#000!important;height:70px!important;width:100%!important;font-size:22px!important;
   font-weight:bold!important;border-radius:16px!important;margin-top:10px!important;border:none!important;
   opacity:1!important;text-transform:uppercase!important;
 }
 
-/* Filtros grandes (UI) */
-.filtro-item span{font-size:13px!important;font-weight:900!important;letter-spacing:1px!important;margin-bottom:5px!important;display:inline-block!important}
-.filtro-item select{font-size:16px!important;height:50px!important;padding:5px 10px!important;border-radius:14px!important;font-weight:bold!important}
-.filtros-wrapper{padding:15px 10px!important;gap:10px!important}
-
-/* Popups premium (añadir nuevo) */
-.premium-overlay{position:fixed;inset:0;background:rgba(0,0,0,.9);display:flex;align-items:center;justify-content:center;z-index:99999;backdrop-filter:blur(12px)}
-.premium-content{background:#0b0f1a;width:85%;max-width:320px;border-radius:40px;border:2px solid #d4af37;padding:35px 25px;text-align:center;box-shadow:0 0 40px rgba(212,175,55,.3)}
-.premium-title{color:#d4af37;font-size:22px;font-weight:900;margin-bottom:25px}
-.premium-input{background:#131926;border:1px solid #1e293b;color:#fff;border-radius:15px;padding:18px;font-size:18px;width:100%;margin-bottom:25px;text-align:center;outline:none}
-.btn-gold{background:linear-gradient(180deg,#bf953f,#fcf6ba,#b38728);color:#000;border:none;width:100%;height:65px;border-radius:20px;font-size:20px;font-weight:900;text-transform:uppercase;margin-bottom:12px}
-.btn-silver{background:linear-gradient(180deg,#757575,#c0c0c0,#ffffff);color:#000;border:none;width:100%;height:65px;border-radius:20px;font-size:20px;font-weight:900;text-transform:uppercase}
-
-/* Popup Nómina */
-.nomina-overlay{position:fixed;inset:0;background:rgba(0,0,0,.9);display:flex;align-items:center;justify-content:center;z-index:100001;backdrop-filter:blur(15px)}
-.nomina-content{background:#0b0f1a;width:85%;max-width:340px;border-radius:45px;border:2px solid #d4af37;padding:40px 25px;text-align:center;box-shadow:0 0 50px rgba(212,175,55,.3)}
-.nomina-title{color:#d4af37;font-size:24px;font-weight:900;margin-bottom:35px}
-.btn-nomina{width:100%;height:75px;border-radius:25px;font-size:24px;font-weight:900;border:none;margin-bottom:15px;cursor:pointer;text-transform:uppercase;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 15px rgba(0,0,0,.4)}
-.btn-oskar{background:linear-gradient(180deg,#bf953f,#fcf6ba,#b38728);color:#000}
-.btn-josune{background:linear-gradient(180deg,#a00050,#ff1493,#ff85c1);color:#fff}
-.btn-cancel{background:linear-gradient(180deg,#757575,#c0c0c0,#ffffff);color:#000;margin-bottom:0}
-
-/* ===== V0.1: Barras responsive para gráficos (Pixel 9a) ===== */
-.card .bar-flex {
-  display: flex;
-  height: clamp(12px, 2.8vw, 20px);
-  border-radius: 8px;
-  overflow: hidden;
-  background: #000;
-  border: 1px solid rgba(212,175,55,.25);
+/* ==========================
+   POPUP PREMIUM + “Añadir nuevo”
+========================== */
+.premium-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.9);display:flex;align-items:center;
+  justify-content:center;z-index:99999;backdrop-filter:blur(12px);
 }
-.card .bar-segment { height: 100%; flex-grow: 1; transition: width 0.25s ease-out; }
-
-@media (max-width: 420px) {
-  .card b,
-  .card .meta { font-size: 13px; }
-  .card .monto { font-size: 15px; }
+.premium-content{
+  background:#0b0f1a;width:85%;max-width:320px;border-radius:40px;border:2px solid #d4af37;
+  padding:35px 25px;text-align:center;box-shadow:0 0 40px rgba(212,175,55,.3);
 }
-@media (min-width: 360px) and (max-width: 420px) and (min-resolution: 350dpi) {
-  .card .bar-flex { height: clamp(12px, 3.2vw, 18px); }
+.premium-title{ color:#d4af37;font-size:22px;font-weight:900;margin-bottom:25px; }
+.premium-input{
+  background:#131926;border:1px solid #1e293b;color:#fff;border-radius:15px;
+  padding:18px;font-size:18px;width:100%;margin-bottom:25px;text-align:center;outline:none;
+}
+.btn-gold{
+  background:linear-gradient(180deg,#bf953f,#fcf6ba,#b38728);color:#000;border:none;
+  width:100%;height:65px;border-radius:20px;font-size:20px;font-weight:900;text-transform:uppercase;margin-bottom:12px;
+}
+.btn-silver{
+  background:linear-gradient(180deg,#757575,#c0c0c0,#ffffff);color:#000;border:none;
+  width:100%;height:65px;border-radius:20px;font-size:20px;font-weight:900;text-transform:uppercase;
 }
 
-/* ===== V0.1: Botón CASA ===== */
-.btn-house {
-  width: 55px;
-  height: 55px;
-  border-radius: 50%;
-  border: none;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: #000;
-  box-shadow: 0 4px 15px rgba(0,0,0,.3);
+/* ==========================
+   POPUP NÓMINA
+========================== */
+.nomina-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.9);display:flex;align-items:center;
+  justify-content:center;z-index:100001;backdrop-filter:blur(15px);
 }
-.btn-house svg { width: 28px; height: 28px; stroke: black; fill: none; stroke-width: 2.5; }
-.btn-house.active svg { stroke: #ef4444; } /* rojo cuando oculta casa */
-.btn-icon svg { width: 28px; height: 28px; }
+.nomina-content{
+  background:#0b0f1a;width:85%;max-width:340px;border-radius:45px;border:2px solid #d4af37;
+  padding:40px 25px;text-align:center;box-shadow:0 0 50px rgba(212,175,55,.3);
+}
+.nomina-title{ color:#d4af37;font-size:24px;font-weight:900;margin-bottom:35px; }
+.btn-nomina{
+  width:100%;height:75px;border-radius:25px;font-size:24px;font-weight:900;border:none;margin-bottom:15px;
+  cursor:pointer;text-transform:uppercase;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 15px rgba(0,0,0,.4);
+}
+.btn-oskar{ background:linear-gradient(180deg,#bf953f,#fcf6ba,#b38728);color:#000; }
+.btn-josune{ background:linear-gradient(180deg,#a00050,#ff1493,#ff85c1);color:#fff; }
+.btn-cancel{ background:linear-gradient(180deg,#757575,#c0c0c0,#ffffff);color:#000;margin-bottom:0; }
 
-/* ===== V0.1: Gráficos 2 (evolución mensual) ===== */
-.g2-wrap { padding: 6px 6px 20px; }
-.g2-chart {
-  position: relative;
-  height: 180px;
-  display: grid;
-  grid-template-columns: repeat(13, 1fr);
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 26px;
-}
-.g2-baseline {
-  position: absolute; left: 0; right: 0; top: 50%;
-  height: 1px; background: rgba(212,175,55,.35);
-}
-.g2-col { position: relative; height: 100%; }
-.g2-square {
-  position: absolute; left: 50%;
-  width: 18px; height: 18px; margin-left: -9px;
-  border-radius: 4px; background: #444;
-  box-shadow: 0 1px 4px rgba(0,0,0,.35);
-}
-.g2-label {
-  position: absolute; bottom: -18px; left: 50%;
-  transform: translateX(-50%);
-  font-size: 10px; color: var(--primary);
+/* ==========================
+   Ajustes varios
+========================== */
+#btnEliminarRegistro button{
+  background:var(--danger);color:#fff;height:60px;width:100%;font-size:18px;margin-top:10px;border:none;
+  font-weight:700;border-radius:16px;
 }
