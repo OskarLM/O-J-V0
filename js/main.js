@@ -511,10 +511,12 @@ const abrirFormulario = (id = null) => {
 
 const guardar = () => {
   const ids = ["editId","origen","categoria","subcategoria","fecha","descripcion","importe"];
-  const v = ids.reduce((acc,id)=>({...acc,document.getElementById(id).value}),{});
+  const v = ids.reduce((acc,id)=>({ ...acc, [id]: document.getElementById(id)?.value }),{});
   const imp = parseFloat(v.importe);
-  if (!v.origen || !v.categoria || !v.subcategoria || isNaN(imp)) return alert("Faltan datos");
-
+  if (!v.origen || !v.categoria || !v.subcategoria || isNaN(imp)) {
+    alert("Faltan datos");
+    return;
+  }
   const m = {
     id : v.editId || `id_${Date.now()}`,
     f  : v.fecha,
@@ -525,7 +527,6 @@ const guardar = () => {
     d  : v.descripcion,
     ts : Date.now()
   };
-
   if (v.editId) {
     const idx = movimientos.findIndex(x => x.id.toString() === v.editId.toString());
     if (idx !== -1) movimientos[idx] = m;
@@ -536,7 +537,6 @@ const guardar = () => {
   localStorage.setItem('movimientos', JSON.stringify(movimientos));
   volver();
 };
-
 const volver = () => {
   document.getElementById("form").classList.add("hidden");
   document.getElementById("movimientos").classList.remove("hidden");
