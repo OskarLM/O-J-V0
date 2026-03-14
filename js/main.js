@@ -28,7 +28,7 @@ let pinActual = "";
 /* ==========================
    PIN V0.1 (hasheado + intentos + cooldown)
 ========================== */
-// Requiere desde utils.js: PIN_STORAGE_KEY, PIN_COOLDOWN_KEY, sha256, getAttempts, setAttempts, isInCooldown, setCooldown
+// Requiere: PIN_STORAGE_KEY, PIN_COOLDOWN_KEY, sha256, getAttempts, setAttempts, isInCooldown, setCooldown (utils.js)
 async function ensureDefaultPinHash() {
   const pinHash = localStorage.getItem(PIN_STORAGE_KEY);
   if (!pinHash) {
@@ -110,7 +110,7 @@ async function verifyAndUnlock(pinPlain) {
     const prev = getAttempts() + 1;
     setAttempts(prev);
     if (prev >= 5) {
-      setCooldown(60); // 60s
+      setCooldown(60);
       setAttempts(0);
       alert("Demasiados intentos fallidos. Bloqueo temporal de 60 segundos.");
     } else {
@@ -157,7 +157,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /* ==========================
-   V1.0 – ICONOS Y CONTROL MODO
+   ICONOS Y CONTROL DE MODO
 ========================== */
 function iconBars(){
   return `
@@ -196,9 +196,9 @@ function setModo(modo){
 }
 
 /* ==========================
-   V1.0 – BOTÓN "CASA"
+   BOTÓN "CASA"
 ========================== */
-let hideCasa = false; // false => muestra todo; true => oculta “compra casa/garaje” y “venta casa”
+let hideCasa = false;
 function toggleCasa(){
   hideCasa = !hideCasa;
   const m = document.getElementById("movimientos");
@@ -239,7 +239,7 @@ function mostrar() {
 
   filtradosGlobal.forEach(m => t += m.imp);
 
-  // Color del balance (top-bar)
+  // Color del balance (topbar)
   const factor = (fs[0] === "TODOS") ? 12 : 1;
   const bD = document.getElementById("balance");
   bD.innerText = t.toFixed(2) + " €";
@@ -323,68 +323,96 @@ function mostrar() {
     document.getElementById("loader").style.display = "none";
   }
 
-  // Refrescar indicador de copia
+  // Indicador de copia
   ensureBackupIndicator();
   updateBackupIndicator();
 }
 
-const renderizarBarrasGraficos = (f) => {
+/* ==========================
+   GRÁFICOS 1: CATEGORÍAS ↔ SUBCATEGORÍAS (Opción C)
+========================== */
+function renderizarBarrasGraficos(f) {
   const lista = document.getElementById("lista");
 
-  // Filtro "Casa"
+  // Filtro categoría
+  const filtroCat = document.getElementById("filtroCat")?.value || "TODAS";
+
+  // Fuente base y filtro "Casa"
   let fuente = filtradosGlobal.slice();
   if (hideCasa) fuente = fuente.filter(m => !isCasaCategory(m.c));
 
-  const totales = fuente
-    .filter(m => m.imp < 0)
-    .reduce((acc,m) => { acc[m.c] = (acc[m.c] || 0) + Math.abs(m.imp); return acc; }, {});
-  const max = Math.max(...Object.values(totales), 1);
+  // Totales:
+  // - Cat = TODAS → por CATEGORÍA
+  // - Cat ≠ TODAS → por SUBCATEGORÍA (solo de esa cat)
+  const totales = {};
+  if (filtroCat === "TODAS") {
+    fuente
+      .filter(m => m.imp < 0)
+      .forEach(m => { totales[m.c] = (totales[m.c] || 0) + Math.abs(m.imp); });
+  } else {
+    fuente
+      .filter(m => m.imp < 0 && m.c === filtroCat)
+      .forEach(m => { totales[m.s] = (totales[m.s] || 0) + Math.abs(m.imp); });
+  }
 
-  let html = `<h2 style="color:var(--primary);font-size:18px;text-align:center">ANÁLISIS DE GASTO</h2>
-  <div style="display:flex;justify-content:center;gap:15px;margin-bottom:25px;font-size:19px;font-weight:900">
-    <span style="color:var(--electric-blue)">0-${50*f}€</span>
-    <span style="color:var(--success)">${200*f}€</span>
-    <span style="color:var(--warning)">${500*f}€</span>
-    <span style="color:var(--danger)">+</span>
-  </div>`;
-  lista.innerHTML += html + Object.entries(totales).sort((a,b)=>b[1]-a[1]).map(([cat,val])=>{
-    const esCasa = cat.toLowerCase().includes("compra casa");
+  const max = Math.max(...Object.values(totales), 1);
+  const titulo = (filtroCat === "TODAS")
+    ? "ANÁLISIS DE GASTO POR CATEGORÍAS"
+    : `SUBCATEGORÍAS DE ${filtroCat}`;
+
+  let html = `
+    <h2 style="color:var(--primary);font-size:18px;text-align:center">${titulo}</h2>
+    <div style="display:flex;justify-content:center;gap:15px;margin-bottom:25px;font-size:19px;font-weight:900">
+      <span style="color:var(--electric-blue)">0-${50*f}€</span>
+      <span style="color:var(--success)">${200*f}€</span>
+      <span style="color:var(--warning)">${500*f}€</span>
+      <span style="color:var(--danger)">+</span>
+    </div>
+  `;
+
+  const items = Object.entries(totales).sort((a,b)=>b[1]-a[1]);
+
+  if (!items.length) {
+    lista.innerHTML += html + `
+      <div class="card" style="text-align:center;border:none">
+        <div style="opacity:.8">No hay datos para los filtros seleccionados.</div>
+      </div>`;
+    return;
+  }
+
+  lista.innerHTML += html + items.map(([label,val])=>{
     const t1 = Math.min(val, 50*f),
           t2 = val > 50*f ? Math.min(val - 50*f ,150*f) : 0,
           t3 = val > 200*f ? Math.min(val - 200*f,300*f) : 0,
           t4 = val > 500*f ? (val - 500*f) : 0;
-    return `<div class="card" style="border:none;background:transparent">
-      <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:5px">
-        <span>${esc(cat)}</span><b>${val.toFixed(2)} €</b>
-      </div>
-      <div style="width:${(val/max)*100}%;height:16px;display:flex;background:#000;border-radius:8px;overflow:hidden;border:1px solid rgba(212,175,55,.2)">
-        ${esCasa
-          ? `<div style="width:100%;background:var(--success)"></div>`
-          : `<div style="width:${(t1/val)*100}%;background:var(--electric-blue)"></div>
-             <div style="width:${(t2/val)*100}%;background:var(--success)"></div>
-             <div style="width:${(t3/val)*100}%;background:var(--warning)"></div>
-             <div style="width:${(t4/val)*100}%;background:var(--danger)"></div>`
-        }
-      </div>
-    </div>`;
-  }).join("");
-};
 
-/* === GRÁFICOS 2 – columnas, animación, tooltip, y colores por UMBRALES DE BALANCE ===
-   t < 0 → rojo
-   0..250 → naranja
-   250.01..750 → verde
-   > 750 → azul eléctrico
-*/
+    return `
+      <div class="card" style="border:none;background:transparent">
+        <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:5px">
+          <span>${esc(label)}</span><b>${val.toFixed(2)} €</b>
+        </div>
+        <div style="width:${(val/max)*100}%;height:16px;display:flex;background:#000;border-radius:8px;overflow:hidden;border:1px solid rgba(212,175,55,.2)">
+          <div style="width:${(t1/val)*100}%;background:var(--electric-blue)"></div>
+          <div style="width:${(t2/val)*100}%;background:var(--success)"></div>
+          <div style="width:${(t3/val)*100}%;background:var(--warning)"></div>
+          <div style="width:${(t4/val)*100}%;background:var(--danger)"></div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+/* ==========================
+   GRÁFICOS 2: Columnas + Animación + Tooltip (colores por BALANCE)
+========================== */
 function renderizarGraficos2() {
   const lista = document.getElementById("lista");
 
-  // Limpia render previo de Gráficos 2 dejando toolbar "Casa"
+  // Limpia render previo dejando toolbar "Casa"
   const oldChart = lista.querySelector('.g2-wrap');
   if (oldChart) oldChart.remove();
 
-  const fs = ["filtroMes","filtroAño","filtroCat","filtroSub","filtroOri"]
-    .map(id => document.getElementById(id).value);
+  const fs = ["filtroMes","filtroAño","filtroCat","filtroSub","filtroOri"].map(id => document.getElementById(id).value);
 
   // Últimos 13 meses
   const hoy = new Date();
@@ -404,7 +432,7 @@ function renderizarGraficos2() {
   };
   const base = (hideCasa ? movimientos.filter(mm => !isCasaCategory(mm.c)) : movimientos).filter(filtraOtros);
 
-  // Sumatorio mensual
+  // Suma mensual
   const sumaMes = new Map();
   for (const mov of base) {
     const k = (mov.f || "").slice(0,7);
@@ -412,21 +440,20 @@ function renderizarGraficos2() {
     sumaMes.set(k, (sumaMes.get(k) || 0) + (Number(mov.imp) || 0));
   }
 
-  // Escala y helpers
+  // Escala
   const valores = meses.map(m => sumaMes.get(m.key) || 0);
   const maxAbs = Math.max(...valores.map(v => Math.abs(v)), 1);
-  const alto   = 180, mitad = alto / 2;
+  const alto = 180, mitad = alto/2;
   const maxDespl = Math.max(mitad - 8, 40);
   const minBar = 4;
 
-  // Color por umbrales de BALANCE (nuevos criterios)
+  // Colores por BALANCE: t<0 rojo | 0..250 naranja | 250.01..750 verde | >750 azul
   const colorPorMes = (t) => {
-    if (t < 0)  return "var(--danger)";
-    if (t <= 250)  return "var(--warning)";
-    if (t <= 750)  return "var(--success)";
+    if (t < 0) return "var(--danger)";
+    if (t <= 250) return "var(--warning)";
+    if (t <= 750) return "var(--success)";
     return "var(--electric-blue)";
   };
-
   const mesesCorta = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
   const fmtEuro = (n) => {
     const val = Number(n) || 0;
@@ -435,10 +462,11 @@ function renderizarGraficos2() {
     return `${sign}${abs} €`;
   };
 
+  // Render
   let html = `
     <div class="g2-wrap">
-      <div class="g2-chart">
-        <div class="g2-baseline"></div>
+      <div class="g2-chart" style="position:relative;height:180px;display:grid;grid-template-columns:repeat(13,1fr);gap:10px;align-items:center;margin-bottom:26px;">
+        <div class="g2-baseline" style="position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(212,175,55,.35)"></div>
   `;
 
   for (const m of meses){
@@ -446,28 +474,25 @@ function renderizarGraficos2() {
     const abs = Math.abs(v);
     const h   = Math.max(minBar, (abs / maxAbs) * maxDespl);
     const pos = v >= 0;
-
     const color = colorPorMes(v);
     const mesIdx = new Date(m.key + "-01T00:00:00").getMonth();
     const label  = mesesCorta[mesIdx];
-
     const tipClass = pos ? 'tip-pos' : 'tip-neg';
     const tipText  = `${label} ${m.d.getFullYear()}: ${fmtEuro(v)}`;
 
     html += `
-      <div class="g2-col" data-key="${m.key}">
+      <div class="g2-col" data-key="${m.key}" style="position:relative;height:100%;">
         <div class="g2-bar ${pos ? 'pos' : 'neg'}" data-h="${h}" style="height:0px;background:${color};"></div>
         <div class="g2-tip ${tipClass}">${tipText}</div>
-        <div class="g2-label">${label}</div>
+        <div class="g2-label" style="position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--primary)">${label}</div>
       </div>
     `;
   }
 
   html += `</div></div>`;
-  // Añadir debajo de la toolbar "Casa"
   lista.insertAdjacentHTML('beforeend', html);
 
-  // Animación
+  // Animación de altura
   requestAnimationFrame(()=>{
     lista.querySelectorAll('.g2-chart .g2-bar').forEach(el=>{
       const target = parseFloat(el.dataset.h) || 0;
@@ -475,7 +500,7 @@ function renderizarGraficos2() {
     });
   });
 
-  // Tooltip táctil
+  // Tooltip táctil/click
   const chart = lista.querySelector('.g2-chart');
   if (!chart) return;
   if (!chart.dataset.tipBound){
@@ -558,9 +583,8 @@ const abrirFormulario = (id = null) => {
 
 const guardar = () => {
   const ids = ["editId","origen","categoria","subcategoria","fecha","descripcion","importe"];
-  // FIX: clave computada [id]
-  // ✅ CORRECTO y compatible con WebViews antiguos
-   const v = ids.reduce((acc,id)=>({ ...acc, [id]: (document.getElementById(id) ? document.getElementById(id).value : undefined) }),{});
+  // ✅ FIX: clave computada [id] (evita "Unexpected token '.'")
+  const v = ids.reduce((acc,id)=>({ ...acc, [id]: (document.getElementById(id) ? document.getElementById(id).value : "") }),{});
   const imp = parseFloat(v.importe);
   if (!v.origen || !v.categoria || !v.subcategoria || isNaN(imp)) return alert("Faltan datos");
 
@@ -580,7 +604,6 @@ const guardar = () => {
     if (idx !== -1) movimientos[idx] = m;
   } else {
     movimientos.push(m);
-    // Disparador de backup cada 15 (rotativo local + descarga)
     if (movimientos.length % 15 === 0) ejecutarBackupRotativo();
   }
   localStorage.setItem('movimientos', JSON.stringify(movimientos));
@@ -594,7 +617,7 @@ const volver = () => {
   mostrar();
 };
 
-/* ===== “+ Añadir nuevo…” SIN prompt(): el valor lo entrega el popup Premium ===== */
+/* === “+ Añadir nuevo…” SIN prompt(): el valor lo entrega el popup Premium === */
 const manejarNuevo = (el, tipo) => {
   if (el.value !== "+") return;
 
@@ -726,7 +749,7 @@ function normalizarListasExistentes(){
 }
 
 /* ==========================
-   INIT + SCROLL + CSV
+   INIT + SCROLL
 ========================== */
 const init = () => {
   const fM = document.getElementById("filtroMes"),
@@ -947,7 +970,7 @@ const importarCSV = (e) => {
 };
 
 /* ==========================
-   POPUP PREMIUM / POPUP NÓMINA
+   POPUPS
 ========================== */
 (function(){
   const lanzarPopupPremium = (el,tipo) => {
@@ -1063,7 +1086,7 @@ function buildBackupObject(){
     meta:{
       createdAt: new Date().toISOString(),
       app: "mis-gastos",
-      version: "V1.0.21",
+      version: "V1.0.22",
     },
     datos:{
       movimientos,
@@ -1114,7 +1137,7 @@ async function downloadEncryptedBackup(enc, prefix='auto_backup'){
   URL.revokeObjectURL(url);
 }
 
-// Botón: Guardar copia en OneDrive (selección de carpeta)
+// Botón: Guardar copia en OneDrive (selector)
 async function guardarCopiaEnOneDrive(){
   try{
     const enc = await encryptBackup(buildBackupObject());
@@ -1132,12 +1155,10 @@ async function guardarCopiaEnOneDrive(){
       });
       const writable = await handle.createWritable();
       await writable.write(blob); await writable.close();
-      // Marca como backup reciente
       localStorage.setItem('backup_last_ts', String(Date.now()));
       updateBackupIndicator();
       alert("📁 Copia guardada. Elige OneDrive en el selector para que se sincronice.");
     } else {
-      // fallback descarga
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url; a.download = filename;
@@ -1153,10 +1174,9 @@ async function guardarCopiaEnOneDrive(){
   }
 }
 
-// Botón: Restaurar copia de OneDrive (selector de archivo)
+// Botón: Restaurar copia (selector)
 async function restaurarCopiaDeOneDrive(){
   try{
-    // showOpenFilePicker si existe
     let file = null;
     if (window.showOpenFilePicker){
       const [handle] = await window.showOpenFilePicker({
@@ -1165,7 +1185,6 @@ async function restaurarCopiaDeOneDrive(){
       });
       file = await handle.getFile();
     } else {
-      // fallback input hidden
       file = await new Promise((resolve,reject)=>{
         const inp = document.createElement('input');
         inp.type = 'file'; inp.accept = 'application/json';
@@ -1182,8 +1201,7 @@ async function restaurarCopiaDeOneDrive(){
     if (payload && payload.ct && payload.iv){
       data = await decryptBackup(payload);
     } else {
-      // Copia no cifrada (compatibilidad retro)
-      data = payload;
+      data = payload; // compatibilidad retro
     }
 
     if (!data || !data.datos) throw new Error("Formato de copia inválido");
@@ -1209,7 +1227,7 @@ async function restaurarCopiaDeOneDrive(){
   }
 }
 
-/* ===== Indicador visual de “Última copia” ===== */
+/* ===== Indicador “Última copia” ===== */
 function ensureBackupIndicator(){
   const top = document.querySelector('.topbar');
   if (!top) return;
@@ -1221,7 +1239,6 @@ function ensureBackupIndicator(){
     top.appendChild(span);
   }
 }
-
 function humanAgo(ts){
   if (!ts) return "—";
   const diff = Date.now() - ts;
@@ -1232,7 +1249,6 @@ function humanAgo(ts){
   const h = Math.floor(m/60);
   return `hace ${h}h`;
 }
-
 function updateBackupIndicator(){
   const el = document.getElementById('backupIndicator');
   if (!el) return;
@@ -1281,7 +1297,7 @@ window.resetTotal = resetTotal;
 window.init = init;
 window.actualizarListas = actualizarListas;
 
-// V1.x
+// Vistas/Modo
 window.setModo = setModo;
 window.toggleCasa = toggleCasa;
 
