@@ -1122,7 +1122,6 @@ window.manejarNuevo = manejarNuevo;
 window.borrarElemento = borrarElemento;
 window.abrirGraficos = abrirGraficos;
 window.ejecutarBackupRotativo = ejecutarBackupRotativo;
-window.resetTotal = resetTotal;
 window.init = init;
 window.actualizarListas = actualizarListas;
 // Vistas/Modo
