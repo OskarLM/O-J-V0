@@ -267,46 +267,69 @@ function layoutFooterReset(btnLeft, btnCenter, btnRight){
     b.style.top = "";
     b.style.transform = "";
     b.style.opacity = "1";
+    // No tocamos width/height aquí (los normaliza el helper)
   });
+}
+
+/* ==========================
+   Normalización de tamaños (todos = VOLVER)
+========================== */
+function _normalizarTamaniosFooter(btnLeft, btnCenter, btnRight) {
+  if (!btnLeft || !btnCenter || !btnRight) return;
+  // Tomar el tamaño REAL de VOLVER
+  const r = btnLeft.getBoundingClientRect();
+  const size = Math.round(Math.max(r.width, r.height));
+
+  [btnCenter, btnRight].forEach(b => {
+    if (!b) return;
+    b.style.width = size + 'px';
+    b.style.height = size + 'px';
+    b.style.borderRadius = '50%';
+  });
+
+  return size;
 }
 
 /* ==========================
    CENTRADO REAL (post‑layout, con medición exacta)
 ========================== */
 // Centra CASA exactamente entre los centros de VOLVER (izq) y G2 (der).
-// Mide anchos reales y espera a que el layout esté aplicado (rAF).
+// Doble rAF: 1º asegura layout aplicado; 2º asegura que el cambio de tamaño ya impactó antes de medir.
 function _recentrarCasa(container, btnLeft, btnCenter, btnRight) {
   if (!container || !btnLeft || !btnCenter) return;
 
   requestAnimationFrame(() => {
-    const fr = container.getBoundingClientRect();
-    const l  = btnLeft.getBoundingClientRect();
-    const c  = btnCenter.getBoundingClientRect();
+    _normalizarTamaniosFooter(btnLeft, btnCenter, btnRight);
 
-    // Si el derecho está visible, úsalo; si no, calcula un "ancla" derecha
-    let rightRect = null;
-    const visible = !!(btnRight &&
-                       btnRight.style.display !== 'none' &&
-                       btnRight.style.pointerEvents !== 'none' &&
-                       btnRight.style.opacity !== '0');
-    if (visible) {
-      rightRect = btnRight.getBoundingClientRect();
-    } else {
-      // Anclaje estimado donde caería el botón derecho
-      const estLeft = (typeof footerAnchors.centerX === 'number')
-        ? footerAnchors.centerX
-        : (container.clientWidth / 2) - (c.width / 2);
-      rightRect = { left: fr.left + estLeft, width: c.width };
-    }
+    requestAnimationFrame(() => {
+      const fr = container.getBoundingClientRect();
+      const l  = btnLeft.getBoundingClientRect();
+      const c  = btnCenter.getBoundingClientRect();
 
-    // Centros reales respecto al contenedor
-    const centerLeft   = (l.left - fr.left) + (l.width  / 2);
-    const centerRight  = (rightRect.left - fr.left) + (rightRect.width / 2);
-    const centerCasa   = (centerLeft + centerRight) / 2;
+      // Si el derecho está visible lo usamos; si no, ancla virtual basada en footerAnchors.centerX
+      let rightRect;
+      const visible = !!(btnRight &&
+                         btnRight.style.display !== 'none' &&
+                         btnRight.style.pointerEvents !== 'none' &&
+                         btnRight.style.opacity !== '0');
+      if (visible) {
+        rightRect = btnRight.getBoundingClientRect();
+      } else {
+        const estLeft = (typeof footerAnchors.centerX === 'number')
+          ? footerAnchors.centerX
+          : (container.clientWidth / 2) - (c.width / 2);
+        rightRect = { left: fr.left + estLeft, width: c.width };
+      }
 
-    // Left final para que el centro de CASA coincida con el punto medio
-    const casaLeft = Math.round(centerCasa - (c.width / 2));
-    btnCenter.style.left = `${casaLeft}px`;
+      // Centros reales respecto al contenedor
+      const centerLeft   = (l.left - fr.left) + (l.width  / 2);
+      const centerRight  = (rightRect.left - fr.left) + (rightRect.width / 2);
+      const centerCasa   = (centerLeft + centerRight) / 2;
+
+      // Posición LEFT para alinear el centro de CASA con el punto medio
+      const casaLeft = Math.round(centerCasa - (c.width / 2));
+      btnCenter.style.left = `${casaLeft}px`;
+    });
   });
 }
 
@@ -329,14 +352,14 @@ function layoutFooterGrafico1(container, btnLeft, btnCenter, btnRight){
     b.style.transform = 'translateY(-50%)';
   });
 
-  // Posicionamiento inicial (izq y der); CASA se corrige después con medición real
+  // Posicionamiento inicial (izq y der). CASA se corrige con medición real.
   btnLeft.style.left   = `${xLeft}px`;
   btnRight.style.left  = `${xG2}px`;
   btnRight.style.display      = '';
   btnRight.style.opacity      = '1';
   btnRight.style.pointerEvents= 'auto';
 
-  // Centrado exacto de CASA
+  // Centrado exacto de CASA (tras normalización de tamaños)
   _recentrarCasa(container, btnLeft, btnCenter, btnRight);
 }
 
@@ -348,7 +371,6 @@ function layoutFooterGrafico2(container, btnLeft, btnCenter, btnRight){
 
   const SIZE  = footerAnchors.size || 65;
   const xLeft = (footerAnchors.leftX   != null) ? footerAnchors.leftX   : 20;
-  const xG2   = (footerAnchors.centerX != null) ? footerAnchors.centerX : ((container.clientWidth/2) - (SIZE/2));
 
   [btnLeft, btnCenter, btnRight].forEach(b=>{
     b.style.position = 'absolute';
@@ -356,15 +378,13 @@ function layoutFooterGrafico2(container, btnLeft, btnCenter, btnRight){
     b.style.transform = 'translateY(-50%)';
   });
 
-  // Coloca el izquierdo visible
+  // Coloca el izquierdo; derecho oculto pero con ancla virtual via footerAnchors.centerX
   btnLeft.style.left   = `${xLeft}px`;
-
-  // Oculta el derecho en G2 (pero _recentrarCasa usará su anclaje virtual)
   btnRight.style.opacity      = '0';
   btnRight.style.left         = `-9999px`;
   btnRight.style.pointerEvents= 'none';
 
-  // Centrado exacto de CASA frente al anclaje derecho virtual
+  // Centrado exacto de CASA frente al ancla virtual
   _recentrarCasa(container, btnLeft, btnCenter, btnRight);
 }
 
