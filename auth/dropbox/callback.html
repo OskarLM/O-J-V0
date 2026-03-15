@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Volviendo desde Dropbox…</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    html,body{margin:0;padding:0;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;background:#0b0b0c;color:#f2f2f2}
+    .wrap{min-height:100dvh;display:grid;place-items:center;text-align:center;padding:24px}
+    .card{max-width:520px;background:#141414;border:1px solid #2a2a2a;border-radius:12px;padding:24px}
+    .spin{width:28px;height:28px;border:3px solid #333;border-top-color:#d4af37;border-radius:50%;animation:rot 1s linear infinite;margin:12px auto}
+    @keyframes rot{to{transform:rotate(1turn)}}
+    .ok{color:#22c55e}.err{color:#ef4444}
+    a{color:#d4af37}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card" id="card">
+    <div class="spin"></div>
+    <h2>Conectando con Dropbox…</h2>
+    <p>Un momento por favor.</p>
+  </div>
+</div>
+
+<script>
+(async () => {
+  // === Config: debe coincidir EXACTO con el de main.js ===
+  const DBX_APP_KEY = 'pow1k3kk53abk75';
+  const DBX_OAUTH_TOKEN = 'https://api.dropboxapi.com/oauth2/token';
+  // Recuperamos el code_verifier usado antes del login
+  const verifier = sessionStorage.getItem('dbx_code_verifier');
+  const url = new URL(window.location.href);
+  const code = url.searchParams.get('code');
+
+  const $card = document.getElementById('card');
+
+  function setHTML(html){ $card.innerHTML = html; }
+  function saveTokens(t){
+    const expires_at = Date.now() + (t.expires_in ? t.expires_in*1000 : 3600*1000);
+    const saved = { ...t, expires_at };
+    localStorage.setItem('dbx_tokens', JSON.stringify(saved));
+  }
+  try {
+    if (!code || !verifier) throw new Error('Falta código o verifier.');
+
+    const body = new URLSearchParams({
+      code,
+      grant_type: 'authorization_code',
+      client_id: DBX_APP_KEY,
+      redirect_uri: 'https://oskarlm.github.io/APK_V0.0/auth/dropbox/callback',
+      code_verifier: verifier
+    });
+
+    const r = await fetch(DBX_OAUTH_TOKEN, {
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body
+    });
+    if (!r.ok) {
+      const err = await r.text();
+      throw new Error(err || 'Error al canjear el token');
+    }
+    const tokens = await r.json();
+    saveTokens(tokens);
+    sessionStorage.removeItem('dbx_code_verifier');
+
+    setHTML(`<h2 class="ok">¡Listo! Dropbox conectado ✅</h2>
+             <p>Ya puedes cerrar esta ventana o volver a la app.</p>
+             <p><a href="https://oskarlm.github.io/APK_V0.0/">Volver a la app</a></p>`);
+    // Quita los parámetros de la URL para que quede limpio si el usuario recarga
+    window.history.replaceState({}, document.title, 'https://oskarlm.github.io/APK_V0.0/auth/dropbox/callback');
+  } catch (e) {
+    console.error(e);
+    setHTML(`<h2 class="err">No se pudo conectar con Dropbox</h2>
+             <pre style="text-align:left;white-space:pre-wrap">${(e && e.message) || e}</pre>
+             <p><a href="https://oskarlm.github.io/APK_V0.0/">Volver a la app</a></p>`);
+  }
+})();
+</script>
+</body>
+</html>
