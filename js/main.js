@@ -1,7 +1,9 @@
 // === main.js ===
-// OskarLM — APK_V0.0 — Dropbox (PKCE) con login automático bajo demanda + scopes correctos.
-// - Si no hay token al subir/restaurar, se lanza dropboxStartLogin() y se sale.
-// - Tras el callback (tokens guardados), vuelves a pulsar y funciona sin pedir más permisos.
+// OskarLM — APK_V0.0 — Modo A (HÍBRIDO):
+// Dropbox maestro + localStorage como caché offline, sin cambios de apariencia.
+// - Al arrancar: pinta desde caché e intenta cargar desde Dropbox en paralelo.
+// - En cambios: sincroniza a Dropbox en segundo plano (debounce).
+// - Si no hay sesión: login PKCE bajo demanda sin romper la UX.
 // - Mantiene: PIN, filtros, lista, gráficos, CSV, backups locales, doble‑tap, layout footer.
 
 // ==========================
@@ -124,7 +126,12 @@ function unlock() {
   const m = document.getElementById("movimientos");
   m.classList.remove("hidden");
   m.dataset.permiso = "OK";
+
+  // 1) Pintamos de inmediato desde caché (UX rápida)
   init();
+
+  // 2) En paralelo, intentamos cargar la última copia desde Dropbox (si hay red/sesión)
+  loadFromDropboxOnStart({ silent: true });
 }
 async function verifyAndUnlock(pinPlain) {
   const remainMs = isInCooldown();
@@ -196,7 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ==========================
-//  ICONOS SVG mínimos (para footer dinámico)
+//  ICONOS SVG (footer)
 // ==========================
 function iconBars(){ return `
   <svg viewBox="0 0 24 24" class="btn-icon" fill="none" stroke="black" stroke-width="3">
@@ -611,7 +618,7 @@ function renderizarGraficos2() {
     const cC = fs[2] === "TODAS" || m.c === fs[2];
     const cS = fs[3] === "TODAS" || m.s === fs[3];
     const cO = fs[4] === "TODOS" || m.o === fs[4];
-    return cC, cS, cO;
+    return cC && cS && cO;
   };
   const base = (hideCasa ? movimientos.filter(mm => !isCasaCategory(mm.c)) : movimientos).filter(filtraOtros);
 
@@ -642,7 +649,7 @@ function renderizarGraficos2() {
   `;
   for (const m of meses){
     const v = sumaMes.get(m.key) || 0;
-    const h = Math.max(minBar, (Math.abs(v)/maxAbs) * 80);
+    const h = Math.max(minBar, (Math.abs(v)/maxAbs) * 80); // altura mitad aprox
     const pos = v >= 0;
     const color = colorPorMes(v);
     const mesIdx = new Date(m.key + "-01T00:00:00").getMonth();
@@ -770,14 +777,33 @@ const guardar = () => {
     if (movimientos.length % 15 === 0) ejecutarBackupRotativo();
   }
   localStorage.setItem('movimientos', JSON.stringify(movimientos));
+
+  // 🔁 Programa sincronización en segundo plano (Dropbox maestro)
+  scheduleSync('guardar');
+
   volver();
 };
+
+function eliminarRegistroActual(){
+  const idAEliminar = (document.getElementById("editId")||{}).value;
+  if (!idAEliminar) return;
+  if (confirm("¿ESTÁS SEGURO DE QUE DESEAS ELIMINAR ESTE REGISTRO?")) {
+    movimientos = movimientos.filter(m => m.id.toString() !== idAEliminar.toString());
+    localStorage.setItem('movimientos', JSON.stringify(movimientos));
+
+    // 🔁 Sincroniza en segundo plano
+    scheduleSync('eliminar');
+
+    volver();
+  }
+}
 
 const volver = () => {
   document.getElementById("form").classList.add("hidden");
   document.getElementById("movimientos").classList.remove("hidden");
   actualizarListas(); mostrar();
 };
+
 const manejarNuevo = (el, tipo) => {
   if (el.value !== "+") return;
   let n = el.dataset.nuevoValor || "";
@@ -796,6 +822,7 @@ const manejarNuevo = (el, tipo) => {
     if (!catIdx.has(keyNew)) {
       catExtra.push(pretty);
       localStorage.setItem('categoriaExtra', JSON.stringify(catExtra));
+      scheduleSync('listas'); // 🔁 sync
     }
     const origenActual = (document.getElementById("origen")||{}).value || "";
     llenar("categoria", catBase, catExtra, pretty, { origenActual });
@@ -804,32 +831,41 @@ const manejarNuevo = (el, tipo) => {
     if (!subIdx.has(keyNew)) {
       subMaestra.push(pretty);
       localStorage.setItem('subMaestra_v2', JSON.stringify(subMaestra));
+      scheduleSync('listas'); // 🔁 sync
     }
     const origenActual = (document.getElementById("origen")||{}).value || "";
     llenar("subcategoria", subMaestra, [], pretty, { origenActual });
   }
 };
+
 const borrarElemento = (tipo) => {
   const select = document.getElementById(tipo);
-  const val = select && select.value; if (!val) return;
+  const val = select && select.value;
+  if (!val) return;
+
   if (tipo === 'categoria') {
     const idx = catExtra.indexOf(val);
     if (idx >= 0) {
       catExtra.splice(idx,1);
       localStorage.setItem('categoriaExtra', JSON.stringify(catExtra));
+      scheduleSync('listas'); // 🔁 sync
       const origenActual = (document.getElementById("origen")||{}).value || "";
       llenar('categoria', catBase, catExtra, "", { origenActual });
-    } else { alert('Solo puedes borrar categorías añadidas por ti.'); }
+    } else {
+      alert('Solo puedes borrar categorías añadidas por ti.');
+    }
   } else if (tipo === 'subcategoria') {
     const idx = subMaestra.indexOf(val);
     if (idx >= 0) {
       subMaestra.splice(idx,1);
       localStorage.setItem('subMaestra_v2', JSON.stringify(subMaestra));
+      scheduleSync('listas'); // 🔁 sync
       const origenActual = (document.getElementById("origen")||{}).value || "";
       llenar('subcategoria', subMaestra, [], "",{ origenActual });
     }
   }
 };
+
 const abrirGraficos = () => {
   const m = document.getElementById("movimientos");
   m.dataset.modo = (m.dataset.modo === "graficos") ? "lista" : "graficos";
@@ -1018,8 +1054,7 @@ const importarCSV = (e) => {
 
         const keyC = canonicalizeLabel(c), keyS = canonicalizeLabel(s);
         if (catIndexCanon.has(keyC)) c = catIndexCanon.get(keyC);
-        if (subIndexCanon.has(keyS)) s = subIndexCanon.get(keyS);
-
+        if (subIndexCanon.has(keyS)) s = subIndexCanon.get(ks);
         let imp = parseFloat(parseEuroNumber(arr[idx.importe] ?? '0'));
         if (o === 'Gasto' && imp > 0) imp = -Math.abs(imp);
         if (o !== 'Gasto' && imp < 0) imp = Math.abs(imp);
@@ -1041,6 +1076,10 @@ const importarCSV = (e) => {
 
       movimientos = [...movimientos, ...nuevos].sort((a,b)=>new Date(b.f)-new Date(a.f));
       localStorage.setItem('movimientos', JSON.stringify(movimientos));
+
+      // 🔁 Sincroniza porque cambió el dataset
+      scheduleSync('importarCSV');
+
       actualizarListas(); resetPagina(); mostrar();
 
       alert(`Importación completa: ${nuevos.length} registros añadidos.`);
@@ -1144,15 +1183,15 @@ async function dropboxStartLogin(){
   const code_challenge = await dbx_sha256Base64Url(code_verifier);
   sessionStorage.setItem('dbx_code_verifier', code_verifier);
 
-const params = new URLSearchParams({
-  response_type: 'code',
-  client_id: DBX_APP_KEY,
-  redirect_uri: DBX_REDIRECT_URI,
-  code_challenge: code_challenge,
-  code_challenge_method: 'S256',
-  token_access_type: 'offline',
-  scope: 'files.content.write files.content.read files.metadata.read'
-});
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id: DBX_APP_KEY,
+    redirect_uri: DBX_REDIRECT_URI,
+    code_challenge: code_challenge,
+    code_challenge_method: 'S256',
+    token_access_type: 'offline',
+    scope: 'files.content.write files.content.read files.metadata.read'
+  });
 
   window.location.href = `${DBX_OAUTH_AUTHORIZE}?${params.toString()}`;
 }
@@ -1175,12 +1214,11 @@ async function dbx_getValidAccessToken(){
   return t.access_token || null;
 }
 
-// === Login bajo demanda: SUBIR
+// === Login bajo demanda: SUBIR manual (visible en UI si lo usas)
 async function dropboxUploadEncryptedBackup(){
   try{
     let token = await dbx_getValidAccessToken();
-    if (!token) { await dropboxStartLogin(); return; } // lanzamos login y salimos
-
+    if (!token) { await dropboxStartLogin(); return; }
     const enc = await encryptBackup(buildBackupObject());
     const payload = JSON.stringify(enc, null, 2);
 
@@ -1206,11 +1244,11 @@ async function dropboxUploadEncryptedBackup(){
   }catch(e){ console.error('Dropbox upload error:', e); alert(String(e?.message || e)); }
 }
 
-// === Login bajo demanda: RESTAURAR
+// === Login bajo demanda: RESTAURAR manual (visible en UI si lo usas)
 async function dropboxDownloadAndRestore(){
   try{
     let token = await dbx_getValidAccessToken();
-    if (!token) { await dropboxStartLogin(); return; } // lanzamos login y salimos
+    if (!token) { await dropboxStartLogin(); return; }
 
     const res = await fetch(`${DBX_CONTENT}/files/download`, {
       method:'POST',
@@ -1242,7 +1280,92 @@ async function dropboxDownloadAndRestore(){
 function dropboxSignOut(){ dbx_clearTokens(); alert('Dropbox desconectado en este dispositivo.'); }
 
 // ==========================
-//  EXPORTAR A GLOBAL
+//  CARGA Y SINCRONIZACIÓN AUTOMÁTICA (Dropbox maestro + caché)
+// ==========================
+let _syncTimer = null;
+
+async function autoSyncToDropbox(reason = 'changed') {
+  try {
+    if (!navigator.onLine) return;
+    const token = await dbx_getValidAccessToken();
+    if (!token) { await dropboxStartLogin(); return; }
+
+    const enc = await encryptBackup(buildBackupObject());
+    const payload = JSON.stringify(enc, null, 2);
+
+    const res = await fetch(`${DBX_CONTENT}/files/upload`, {
+      method:'POST',
+      headers:{
+        'Authorization': `Bearer ${token}`,
+        'Dropbox-API-Arg': JSON.stringify({
+          path: DBX_FILE_PATH,
+          mode: 'overwrite',
+          autorename: false,
+          mute: true
+        }),
+        'Content-Type':'application/octet-stream'
+      },
+      body: new TextEncoder().encode(payload)
+    });
+    if (!res.ok) {
+      const errTxt = await res.text();
+      console.warn('Sync Dropbox error:', errTxt);
+      return;
+    }
+    localStorage.setItem('backup_last_ts', String(Date.now()));
+    updateBackupIndicator?.();
+  } catch (e) {
+    console.warn('AutoSync Dropbox falló:', e);
+  }
+}
+function scheduleSync(reason = 'changed') {
+  try { clearTimeout(_syncTimer); } catch {}
+  _syncTimer = setTimeout(() => autoSyncToDropbox(reason), 1200);
+}
+async function loadFromDropboxOnStart({ silent = true } = {}) {
+  try {
+    if (!navigator.onLine) return;
+    const token = await dbx_getValidAccessToken();
+    if (!token) return;
+
+    const res = await fetch(`${DBX_CONTENT}/files/download`, {
+      method:'POST',
+      headers:{
+        'Authorization': `Bearer ${token}`,
+        'Dropbox-API-Arg': JSON.stringify({ path: DBX_FILE_PATH })
+      }
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      console.info('No se pudo descargar (quizá aún no hay copia en Dropbox):', txt);
+      return;
+    }
+    const text = await res.text();
+    let payload; try { payload = JSON.parse(text); } catch { return; }
+    const data = (payload && payload.ct && payload.iv) ? await decryptBackup(payload) : payload;
+    if (!data || !data.datos) return;
+
+    movimientos = Array.isArray(data.datos.movimientos) ? data.datos.movimientos : [];
+    catExtra    = Array.isArray(data.datos.catExtra)    ? data.datos.catExtra    : [];
+    subMaestra  = Array.isArray(data.datos.subMaestra)  ? data.datos.subMaestra  : [];
+
+    localStorage.setItem('movimientos', JSON.stringify(movimientos));
+    localStorage.setItem('categoriaExtra', JSON.stringify(catExtra));
+    localStorage.setItem('subMaestra_v2', JSON.stringify(subMaestra));
+    localStorage.setItem('backup_last_ts', String(Date.now()));
+    updateBackupIndicator?.();
+
+    actualizarListas?.(); resetPagina?.(); mostrar?.();
+
+    if (!silent) alert('Datos cargados desde Dropbox.');
+  } catch (e) {
+    console.warn('Carga automática desde Dropbox falló:', e);
+  }
+}
+window.addEventListener('online', () => scheduleSync('online'));
+
+// ==========================
+//  EXPORTAR A GLOBAL (para HTML)
 // ==========================
 function resetTotal(){ /* sin operación (compat) */ }
 
@@ -1256,6 +1379,7 @@ window.resetPagina = resetPagina;
 window.mostrar = mostrar;
 window.abrirFormulario = abrirFormulario;
 window.volver = volver;
+window.eliminarRegistroActual = eliminarRegistroActual;
 
 window.exportarCSV = exportarCSV;
 window.importarCSV = importarCSV;
@@ -1274,7 +1398,7 @@ window.toggleCasa = toggleCasa;
 window.handleGraficoBarClick = handleGraficoBarClick;
 window.abrirDetalleMovs = abrirDetalleMovs;
 
-// Dropbox (login bajo demanda)
+// Dropbox (manual por si lo usas en la UI)
 window.dropboxStartLogin = dropboxStartLogin;
 window.dropboxUploadEncryptedBackup = dropboxUploadEncryptedBackup;
 window.dropboxDownloadAndRestore = dropboxDownloadAndRestore;
@@ -1282,4 +1406,3 @@ window.dropboxSignOut = dropboxSignOut;
 
 // Utilidades backup
 window.createAndStoreLocalBackup = createAndStoreLocalBackup;
-
