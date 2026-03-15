@@ -11,16 +11,17 @@
   <!-- PWA -->
   <meta name="theme-color" content="#d4af37" />
   <link rel="manifest" href="./manifest.json" />
-<!-- Chrome / Android / Estándar -->
-<meta name="mobile-web-app-capable" content="yes">
 
-<!-- Safari iOS (compatibilidad con versiones antiguas) -->
-<meta name="apple-mobile-web-app-capable" content="yes">
-  <!-- iOS meta -->
-  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <!-- Chrome / Android / Estándar -->
+  <meta name="mobile-web-app-capable" content="yes">
+
+  <!-- Safari iOS (compatibilidad con versiones antiguas) -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+  <!-- iOS Icon -->
   <link rel="apple-touch-icon"
-        href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230b0f1a'/><circle cx='50' cy='50' r='40' fill='none' stroke='%23d4af37' stroke-width='4'/><text x='50%25' y='55%25' dominant-baseline='middle' text-anchor='middle' font-family='serif' font-weight='bold' font-size='35' fill='%23d4af37'>O&J</text></svg>'" />
+        href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230b0f1a'/><circle cx='50' cy='50' r='40' fill='none' stroke='%23d4af37' stroke-width='4'/><text x='50%25' y='55%25' dominant-baseline='middle' text-anchor='middle' font-family='serif' font-weight='bold' font-size='35' fill='%23d4af37'>O&amp;J</text></svg>'" />
 
   <!-- CSS principal -->
   <link rel="stylesheet" href="./css/style.css" />
@@ -96,7 +97,6 @@
 
       <!-- Copias de seguridad (Dropbox) -->
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px;">
-
         <button id="btnBackupDropbox" class="btn-gold" onclick="dropboxUploadEncryptedBackup()">
           📤 Guardar copia en Dropbox
         </button>
@@ -104,13 +104,10 @@
         <button id="btnRestoreDropbox" class="btn-silver" onclick="dropboxDownloadAndRestore()">
           📥 Restaurar copia de Dropbox
         </button>
-
       </div>
 
-      <!-- Footer original: IZQ / CENTRO / BALANCE -->
+      <!-- Footer original -->
       <div class="footer-row">
-
-        <!-- IZQUIERDA -->
         <button class="plus" aria-label="Ver gráficos"
                 style="width:55px;height:55px;background:var(--gold-metal);font-size:20px">
           <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="black" stroke-width="3">
@@ -120,16 +117,12 @@
           </svg>
         </button>
 
-        <!-- CENTRO (“+”) -->
         <button class="plus" aria-label="Nuevo registro">+</button>
 
-        <!-- DERECHA (balance) -->
         <div id="balance">0.00 €</div>
 
-        <!-- FANTASMA -->
         <button class="plus" aria-hidden="true"
                 style="opacity:0;pointer-events:none;position:absolute;left:-9999px;"></button>
-
       </div>
     </div>
   </div>
@@ -164,10 +157,12 @@
 
       <textarea id="descripcion" maxlength="200" placeholder="Nota..." style="min-height:100px"></textarea>
 
-      <button onclick="guardar()" style="background:var(--gold-gradient);color:#000;height:70px;width:100%;font-size:22px;margin-top:10px;border:none;font-weight:700;border-radius:16px">GUARDAR</button>
+      <button onclick="guardar()"
+              style="background:var(--gold-gradient);color:#000;height:70px;width:100%;font-size:22px;margin-top:10px;border:none;font-weight:700;border-radius:16px">GUARDAR</button>
 
       <div id="btnEliminarRegistro" class="hidden">
-        <button onclick="eliminarRegistroActual()" style="background:var(--danger);color:#fff;height:60px;width:100%;font-size:18px;margin-top:10px;border:none;font-weight:700;border-radius:16px">ELIMINAR</button>
+        <button onclick="eliminarRegistroActual()"
+                style="background:var(--danger);color:#fff;height:60px;width:100%;font-size:18px;margin-top:10px;border:none;font-weight:700;border-radius:16px">ELIMINAR</button>
       </div>
 
       <button onclick="volver()" class="btn-cancel-plate">CANCELAR</button>
@@ -175,7 +170,8 @@
   </div>
 
   <!-- JS -->
-  <script src="./js/utils.js"></script>
-  <script src="./js/main.js"></script>
+  <script src="./js/utils.js?v=2"></script>
+  <!-- IMPORTANTÍSIMO: versionado para obligar a cargar el main.js nuevo -->
+  <script src="./js/main.js?v=5"></script>
 </body>
 </html>
