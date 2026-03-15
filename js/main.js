@@ -77,9 +77,17 @@ const buildCanonIndex = (preferida=[], secundaria=[]) => {
   return map;
 };
 
-function esc(s){
-  const map = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
-  return (s ?? '').toString().replace(/[&<>"']/g, ch => map[ch]);
+// ⚠️ IMPORTANTE: La función esc(s) se usa desde utils.js (se elimina duplicado aquí)
+
+/* ==========================
+   Helper: debounce (rendimiento, sin cambiar UX)
+========================== */
+function debounce(fn, delay = 150) {
+  let t;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn.apply(null, args), delay);
+  };
 }
 
 /* ==========================
@@ -88,7 +96,9 @@ function esc(s){
 async function ensureDefaultPinHash() {
   const pinHash = localStorage.getItem(PIN_STORAGE_KEY);
   if (!pinHash) {
-    const h = await sha256("7143");
+    let defaultPin = "7143";            // misma política que antes
+    const h = await sha256(defaultPin);
+    defaultPin = null;                  // higiene: soltar referencia
     localStorage.setItem(PIN_STORAGE_KEY, h);
   }
 }
@@ -248,8 +258,8 @@ function ensureThreePlusButtons() {
     b.style.cssText = 'opacity:0;pointer-events:none;position:absolute;left:-9999px;';
     fr.appendChild(b);
   }
-  plus = fr.querySelectorAll('.plus');
-  return plus;
+  // devolver Array nativo para trabajo homogéneo
+  return Array.from(fr.querySelectorAll('.plus'));
 }
 function layoutFooterReset(btnLeft, btnCenter, btnRight){
   [btnLeft, btnCenter, btnRight].forEach(b=>{
@@ -272,15 +282,12 @@ function layoutFooterGrafico1(container, btnLeft, btnCenter, btnRight){
   const SIZE  = footerAnchors.size || 65;
   const xLeft = (footerAnchors.leftX   != null) ? footerAnchors.leftX   : 20;
   const xG2   = (footerAnchors.centerX != null) ? footerAnchors.centerX : ((container.clientWidth/2) - (SIZE/2));
-  // Cálculo preciso del centro visual
-const centerLeft = xLeft + SIZE / 2;
-const centerG2   = xG2   + SIZE / 2;
 
-// Centro exacto entre ambos
-const centerCasa = (centerLeft + centerG2) / 2;
-
-// Posición LEFT final del botón casa
-const xCasa = Math.round(centerCasa - SIZE / 2);
+  // === CENTRADO REAL DEL BOTÓN CASA (usando centros visuales) ===
+  const centerLeft = xLeft + SIZE / 2;
+  const centerG2   = xG2   + SIZE / 2;
+  const centerCasa = (centerLeft + centerG2) / 2;
+  const xCasa      = Math.round(centerCasa - SIZE / 2);
 
   [btnLeft, btnCenter, btnRight].forEach(b=>{
     b.style.position = 'absolute';
@@ -306,15 +313,12 @@ function layoutFooterGrafico2(container, btnLeft, btnCenter, btnRight){
   const SIZE  = footerAnchors.size || 65;
   const xLeft = (footerAnchors.leftX   != null) ? footerAnchors.leftX   : 20;
   const xG2   = (footerAnchors.centerX != null) ? footerAnchors.centerX : ((container.clientWidth/2) - (SIZE/2));
-  // Cálculo preciso del centro visual
-const centerLeft = xLeft + SIZE / 2;
-const centerG2   = xG2   + SIZE / 2;
 
-// Centro exacto entre ambos
-const centerCasa = (centerLeft + centerG2) / 2;
-
-// Posición LEFT final del botón casa
-const xCasa = Math.round(centerCasa - SIZE / 2);
+  // === CENTRADO REAL DEL BOTÓN CASA (usando centros visuales) ===
+  const centerLeft = xLeft + SIZE / 2;
+  const centerG2   = xG2   + SIZE / 2;
+  const centerCasa = (centerLeft + centerG2) / 2;
+  const xCasa      = Math.round(centerCasa - SIZE / 2);
 
   [btnLeft, btnCenter, btnRight].forEach(b=>{
     b.style.position = 'absolute';
@@ -407,8 +411,8 @@ function mostrar() {
   const footerRow = document.querySelector('.footer-row');
   const plus = ensureThreePlusButtons();
   const btnLeft   = plus[0] || null; // IZQ
-  const btnCenter = plus[1] || null; // CENTRO
-  const btnRight  = plus[2] || null; // DERECHA (puede ser “fantasma”)
+  const btnCenter = plus[1] || null; // CENTRO (CASA en G1/G2)
+  const btnRight  = plus[2] || null; // DERECHA (o “fantasma”)
 
   const modo = movDiv.dataset.modo || "lista";
   const aplicarEstadoCasa = () => { if (btnCenter) btnCenter.classList.toggle("active", !!hideCasa); };
@@ -484,8 +488,8 @@ function mostrar() {
   updateBackupIndicator();
 }
 
-// Recalcular en resize/orientación
-window.addEventListener('resize', function(){
+// Recalcular en resize/orientación (con debounce para rendimiento)
+window.addEventListener('resize', debounce(function(){
   const movDiv = document.getElementById("movimientos");
   if (!movDiv) return;
   const modo = movDiv.dataset.modo || "lista";
@@ -502,7 +506,7 @@ window.addEventListener('resize', function(){
   else layoutFooterGrafico2(footerRow, btnLeft, btnCenter, btnRight);
 
   layoutBalanceFixed(footerRow, balanceEl);
-});
+}, 150));
 
 /* ==========================
    GRÁFICOS 1 (barras) + DRILL
@@ -956,15 +960,19 @@ const init = () => {
   mostrar();
 };
 
-window.onscroll = function(){
+// Scroll infinito (con candado + passive para rendimiento)
+let _renderLock = false;
+window.addEventListener('scroll', () => {
   const movDiv = document.getElementById("movimientos");
   if (!movDiv || movDiv.dataset.modo === "graficos") return;
   if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 200 && registrosVisibles < filtradosGlobal.length) {
+    if (_renderLock) return;
+    _renderLock = true;
     const loader = document.getElementById("loader");
     if (loader) loader.style.display = "block";
-    setTimeout(function(){ registrosVisibles += 25; mostrar(); }, 200);
+    setTimeout(function(){ registrosVisibles += 25; mostrar(); _renderLock = false; }, 200);
   }
-};
+}, { passive: true });
 
 /* ==========================
    CSV: EXPORTACIÓN / IMPORTACIÓN
