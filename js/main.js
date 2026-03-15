@@ -2912,15 +2912,15 @@ window.actualizarListas = actualizarListas;
 window.setModo = setModo;
 window.toggleCasa = toggleCasa;
 
-// Gráficos (drill)
+// Gráficos
 window.handleGraficoBarClick = handleGraficoBarClick;
 window.abrirDetalleMovs = abrirDetalleMovs;
 
-// Dropbox (manual por si lo usas en la UI)
+// Dropbox
 window.dropboxStartLogin = dropboxStartLogin;
 window.dropboxUploadEncryptedBackup = dropboxUploadEncryptedBackup;
 window.dropboxDownloadAndRestore = dropboxDownloadAndRestore;
 window.dropboxSignOut = dropboxSignOut;
 
-// Utilidades backup
+// Backup
 window.createAndStoreLocalBackup = createAndStoreLocalBackup;
