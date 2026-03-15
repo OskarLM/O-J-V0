@@ -1,8 +1,8 @@
 // === main.js ===
-// OskarLM — APK_V0.0 — Soporta Dropbox (PKCE) con login automático bajo demanda.
+// OskarLM — APK_V0.0 — Dropbox (PKCE) con login automático bajo demanda + scopes correctos.
 // - Si no hay token al subir/restaurar, se lanza dropboxStartLogin() y se sale.
-// - Tras volver del callback y quedar autenticado, repite la acción y subirá/restaurará sin pedir permisos.
-// - Mantiene: PIN, filtros, lista, gráficos, CSV, backups locales, doble‑tap pantalla completa, layout footer.
+// - Tras el callback (tokens guardados), vuelves a pulsar y funciona sin pedir más permisos.
+// - Mantiene: PIN, filtros, lista, gráficos, CSV, backups locales, doble‑tap, layout footer.
 
 // ==========================
 //  BASES Y ESTADO GLOBAL
@@ -31,7 +31,7 @@ let hideCasa          = false;   // toggle botón Casa
 let fullscreenMode    = false;   // oculta filtros + footer
 
 // ==========================
-//  CIFRADO BACKUP (AES-GCM con PIN) — reusa utils.js (sha256, etc.)
+//  CIFRADO BACKUP (AES-GCM con PIN)
 // ==========================
 function hexToBytes(hex){ const a=[]; for(let i=0;i<hex.length;i+=2) a.push(parseInt(hex.slice(i,i+2),16)); return new Uint8Array(a); }
 function bytesToBase64(bytes){ if (typeof btoa==='function'){ let bin=''; for(let i=0;i<bytes.length;i++) bin+=String.fromCharCode(bytes[i]); return btoa(bin); } else { return Buffer.from(bytes).toString('base64'); } }
@@ -507,6 +507,7 @@ function renderizarBarrasGraficos(f) {
   } else {
     for (let m of fuente) if (m.imp < 0 && m.c === filtroCat) totales[m.s] = (totales[m.s]||0) + Math.abs(m.imp);
   }
+
   const vals = Object.values(totales);
   const max = Math.max(...vals, 1);
   const titulo = (filtroCat === "TODAS") ? "ANÁLISIS DE GASTO POR CATEGORÍAS" : `SUBCATEGORÍAS DE ${filtroCat}`;
@@ -525,6 +526,7 @@ function renderizarBarrasGraficos(f) {
     lista.innerHTML += html + `<div class="card" style="text-align:center;border:none"><div style="opacity:.8">No hay datos para los filtros seleccionados.</div></div>`;
     return;
   }
+
   lista.innerHTML += html + items.map(([label,val])=>{
     const t1 = Math.min(val, 50*f),
           t2 = val > 50*f ? Math.min(val - 50*f ,150*f) : 0,
@@ -609,7 +611,7 @@ function renderizarGraficos2() {
     const cC = fs[2] === "TODAS" || m.c === fs[2];
     const cS = fs[3] === "TODAS" || m.s === fs[3];
     const cO = fs[4] === "TODOS" || m.o === fs[4];
-    return cC && cS && cO;
+    return cC, cS, cO;
   };
   const base = (hideCasa ? movimientos.filter(mm => !isCasaCategory(mm.c)) : movimientos).filter(filtraOtros);
 
@@ -640,7 +642,7 @@ function renderizarGraficos2() {
   `;
   for (const m of meses){
     const v = sumaMes.get(m.key) || 0;
-    const h = Math.max(minBar, (Math.abs(v)/maxAbs) * 80); // altura mitad aprox
+    const h = Math.max(minBar, (Math.abs(v)/maxAbs) * 80);
     const pos = v >= 0;
     const color = colorPorMes(v);
     const mesIdx = new Date(m.key + "-01T00:00:00").getMonth();
@@ -1110,12 +1112,11 @@ if ('serviceWorker' in navigator) {
 }
 
 // ==========================
-//  DROPBOX — PKCE + API v2
-//  (con login automático bajo demanda)
+//  DROPBOX — PKCE + API v2 (login bajo demanda + scopes correctos)
 // ==========================
 const DBX_APP_KEY = 'pow1k3kk53abk75';
 const DBX_REDIRECT_URI = 'https://oskarlm.github.io/APK_V0.0/auth/dropbox/callback';
-const DBX_FILE_PATH = '/mis_gastos_backup.json'; // App folder
+const DBX_FILE_PATH = '/mis_gastos_backup.json';
 const DBX_OAUTH_AUTHORIZE = 'https://www.dropbox.com/oauth2/authorize';
 const DBX_OAUTH_TOKEN      = 'https://api.dropboxapi.com/oauth2/token';
 const DBX_CONTENT          = 'https://content.dropboxapi.com/2';
@@ -1137,24 +1138,31 @@ function dbx_getTokens(){ try {return JSON.parse(localStorage.getItem('dbx_token
 function dbx_setTokens(t){ localStorage.setItem('dbx_tokens', JSON.stringify(t||{})); }
 function dbx_clearTokens(){ localStorage.removeItem('dbx_tokens'); }
 
+// Inicia login con scopes de archivos
 async function dropboxStartLogin(){
   const code_verifier  = dbx_randomString(64);
   const code_challenge = await dbx_sha256Base64Url(code_verifier);
   sessionStorage.setItem('dbx_code_verifier', code_verifier);
+
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: DBX_APP_KEY,
     redirect_uri: DBX_REDIRECT_URI,
     code_challenge: code_challenge,
     code_challenge_method: 'S256',
-    token_access_type: 'offline'
-    // scope: 'files.content.write files.content.read files.metadata.read'
+    token_access_type: 'offline',
+    // 👇 Scopes imprescindibles para subir/bajar archivos
+    scope: 'files.content.write files.content.read files.metadata.read'
   });
+
   window.location.href = `${DBX_OAUTH_AUTHORIZE}?${params.toString()}`;
 }
+
+// Token válido (refresca si caducó)
 async function dbx_getValidAccessToken(){
   let t = dbx_getTokens(); if (!t) return null;
   if (t.access_token && t.expires_at && Date.now() < t.expires_at) return t.access_token;
+
   if (t.refresh_token) {
     const body = new URLSearchParams({ grant_type:'refresh_token', client_id:DBX_APP_KEY, refresh_token:t.refresh_token });
     const r = await fetch(DBX_OAUTH_TOKEN, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body });
@@ -1168,14 +1176,12 @@ async function dbx_getValidAccessToken(){
   return t.access_token || null;
 }
 
-// === AJUSTE: login automático bajo demanda ===
+// === Login bajo demanda: SUBIR
 async function dropboxUploadEncryptedBackup(){
   try{
     let token = await dbx_getValidAccessToken();
-    if (!token) { // no hay sesión → lanzar login y salir
-      await dropboxStartLogin();
-      return;
-    }
+    if (!token) { await dropboxStartLogin(); return; } // lanzamos login y salimos
+
     const enc = await encryptBackup(buildBackupObject());
     const payload = JSON.stringify(enc, null, 2);
 
@@ -1183,7 +1189,12 @@ async function dropboxUploadEncryptedBackup(){
       method:'POST',
       headers:{
         'Authorization': `Bearer ${token}`,
-        'Dropbox-API-Arg': JSON.stringify({ path: DBX_FILE_PATH, mode:{'.tag':'overwrite'}, mute:true }),
+        'Dropbox-API-Arg': JSON.stringify({
+          path: DBX_FILE_PATH,
+          mode: 'overwrite',
+          autorename: false,
+          mute: true
+        }),
         'Content-Type':'application/octet-stream'
       },
       body: new TextEncoder().encode(payload)
@@ -1193,15 +1204,15 @@ async function dropboxUploadEncryptedBackup(){
     localStorage.setItem('backup_last_ts', String(Date.now()));
     updateBackupIndicator?.();
     alert('✅ Copia subida a Dropbox.');
-  }catch(e){ console.error(e); alert('No se pudo subir a Dropbox.'); }
+  }catch(e){ console.error('Dropbox upload error:', e); alert(String(e?.message || e)); }
 }
+
+// === Login bajo demanda: RESTAURAR
 async function dropboxDownloadAndRestore(){
   try{
     let token = await dbx_getValidAccessToken();
-    if (!token) { // no hay sesión → lanzar login y salir
-      await dropboxStartLogin();
-      return;
-    }
+    if (!token) { await dropboxStartLogin(); return; } // lanzamos login y salimos
+
     const res = await fetch(`${DBX_CONTENT}/files/download`, {
       method:'POST',
       headers:{
@@ -1227,7 +1238,7 @@ async function dropboxDownloadAndRestore(){
 
     actualizarListas?.(); resetPagina?.(); mostrar?.();
     alert('✅ Copia restaurada desde Dropbox.');
-  }catch(e){ console.error(e); alert('No se pudo descargar/restaurar desde Dropbox.'); }
+  }catch(e){ console.error('Dropbox download error:', e); alert(String(e?.message || e)); }
 }
 function dropboxSignOut(){ dbx_clearTokens(); alert('Dropbox desconectado en este dispositivo.'); }
 
