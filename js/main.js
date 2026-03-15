@@ -272,7 +272,15 @@ function layoutFooterGrafico1(container, btnLeft, btnCenter, btnRight){
   const SIZE  = footerAnchors.size || 65;
   const xLeft = (footerAnchors.leftX   != null) ? footerAnchors.leftX   : 20;
   const xG2   = (footerAnchors.centerX != null) ? footerAnchors.centerX : ((container.clientWidth/2) - (SIZE/2));
-  const xCasa = Math.round((xLeft + xG2) / 2);
+  // Cálculo preciso del centro visual
+const centerLeft = xLeft + SIZE / 2;
+const centerG2   = xG2   + SIZE / 2;
+
+// Centro exacto entre ambos
+const centerCasa = (centerLeft + centerG2) / 2;
+
+// Posición LEFT final del botón casa
+const xCasa = Math.round(centerCasa - SIZE / 2);
 
   [btnLeft, btnCenter, btnRight].forEach(b=>{
     b.style.position = 'absolute';
@@ -298,7 +306,15 @@ function layoutFooterGrafico2(container, btnLeft, btnCenter, btnRight){
   const SIZE  = footerAnchors.size || 65;
   const xLeft = (footerAnchors.leftX   != null) ? footerAnchors.leftX   : 20;
   const xG2   = (footerAnchors.centerX != null) ? footerAnchors.centerX : ((container.clientWidth/2) - (SIZE/2));
-  const xCasa = Math.round((xLeft + xG2) / 2);
+  // Cálculo preciso del centro visual
+const centerLeft = xLeft + SIZE / 2;
+const centerG2   = xG2   + SIZE / 2;
+
+// Centro exacto entre ambos
+const centerCasa = (centerLeft + centerG2) / 2;
+
+// Posición LEFT final del botón casa
+const xCasa = Math.round(centerCasa - SIZE / 2);
 
   [btnLeft, btnCenter, btnRight].forEach(b=>{
     b.style.position = 'absolute';
