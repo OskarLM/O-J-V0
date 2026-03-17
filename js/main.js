@@ -1,4 +1,4 @@
-// === main.js — Sin botón fantasma: CASA centrada y balance correcto; G1↔G2 por doble‑tap en CASA ===
+// === main.js — Botón G2 real (sin fantasma) + CASA centrada + BALANCE en el mismo sitio relativo del footer que en Movimientos ===
 if (window.__APP_LOADED__) {
   // Evitar doble carga
 } else {
@@ -33,7 +33,10 @@ if (window.__APP_LOADED__) {
   let rotateReady = false;
   let rotateReadyTimer = null;
 
-  // Escape seguro para HTML (corrigido)
+  // Offset de referencia del balance (medido en Movimientos)
+  let balanceRightRef = null;
+
+  // Escape seguro para HTML (corregido)
   function esc(s){
     return (s ?? '')
       .toString()
@@ -179,7 +182,7 @@ if (window.__APP_LOADED__) {
   }
 
   // ==========================
-  // Doble‑tap (UI) + Rotación armada + Enlace guardar
+  // FULLSCREEN (doble‑tap / dblclick) + ENLACE SEGURO GUARDAR
   // ==========================
   function bindGuardarHandlers() {
     const form = document.getElementById('form');
@@ -219,13 +222,13 @@ if (window.__APP_LOADED__) {
       if (document.documentElement) document.documentElement.style.touchAction = 'manipulation';
       if (document.body)           document.body.style.touchAction           = 'manipulation';
 
-      // Doble‑tap UI + armar rotación si estás en gráficos
-      let _lastTap = 0; const TAP_WINDOW = 250;
+      // Doble‑tap / dblclick para fullscreen + armar rotación si estás en gráficos
+      let _lastTap = 0; const TAP_WINDOW = 250; // ms
       const isInteractive = (el) => !!(el && el.closest('button, a, select, input, textarea, label, [role="button"], [tabindex]'));
       window.addEventListener('touchstart', (ev) => {
         const t = Date.now();
-        const el = ev.target;
-        if (isInteractive(el)) return;
+        const target = ev.target;
+        if (isInteractive(target)) return;
         if (t - _lastTap <= TAP_WINDOW) {
           ev.preventDefault();
           toggleFullscreenUI();
@@ -236,15 +239,14 @@ if (window.__APP_LOADED__) {
         }
       }, { passive: false });
       window.addEventListener('dblclick', (ev) => {
-        const el = ev.target;
-        if (isInteractive(el)) return;
+        const target = ev.target;
+        if (isInteractive(target)) return;
         ev.preventDefault();
         toggleFullscreenUI();
         armRotateIfGraficos();
       }, { passive: false });
 
-      try { const prev = sessionStorage.getItem('ui_fullscreen'); if (prev === '1') { fullscreenMode = true; toggleFullscreenUI(); } } catch {}
-
+      // Enlazar Guardar
       bindGuardarHandlers();
     });
   } else {
@@ -274,6 +276,11 @@ if (window.__APP_LOADED__) {
     <svg viewBox="0 0 24 24" class="btn-icon" fill="none" stroke="black" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
       <path d="M15 19l-7-7 7-7"></path>
     </svg>`; }
+  function iconGraph2(){ return `
+    <svg viewBox="0 0 24 24" class="btn-icon" fill="none" stroke-width="2.6">
+      <rect x="6" y="7" width="4" height="10" fill="#ef4444" stroke="#ef4444" rx="1"></rect>
+      <rect x="14" y="5" width="4" height="12" fill="#22c55e" stroke="#22c55e" rx="1"></rect>
+    </svg>`; }
   function iconCasa(){ return `
     <svg viewBox="0 0 24 24">
       <path d="M3 10.5 L12 3 L21 10.5" />
@@ -281,13 +288,17 @@ if (window.__APP_LOADED__) {
     </svg>`; }
 
   // ==========================
-  // VISTAS / TOGGLE CASA
+  // VISTAS Y TOGGLE CASA
   // ==========================
   function setModo(modo){
     const m = document.getElementById("movimientos");
     const from = m.dataset.modo || 'lista';
-    // Al entrar en gráficos desde lista, captura anclajes
-    if ((modo === 'graficos' || modo === 'graficos2') && from === 'lista') { captureFooterAnchors(); }
+    if ((modo === 'graficos' || modo === 'graficos2') && from === 'lista') {
+      // Capturamos anclajes de los dos botones existentes (left + center)
+      captureFooterAnchors();
+      // También capturamos la referencia del balance (posición natural en Movimientos)
+      captureBalanceRef();
+    }
     m.dataset.modo = modo; // "lista" | "graficos" | "graficos2"
     resetPagina(); mostrar();
   }
@@ -319,98 +330,165 @@ if (window.__APP_LOADED__) {
   }
 
   // ==========================
-  // LAYOUT FOOTER — sin botón derecho
+  // BOTONES FOOTER — crear botón derecho real solo en gráficos
   // ==========================
-  function ensureTwoPlusButtons() {
-    const fr = document.querySelector('.footer-row'); 
-    if (!fr) return [];
-    const cs = getComputedStyle(fr); 
-    if (cs.position === 'static') fr.style.position = 'relative';
-    // NO creamos placeholders; devolvemos solo los existentes (izq y centro)
-    return Array.from(fr.querySelectorAll('.plus')).slice(0,2);
+  function ensureRealButtons() {
+    const fr = document.querySelector('.footer-row');
+    if (!fr) return { btnLeft:null, btnCenter:null, btnRight:null };
+
+    // Tomamos los dos plus que ya existen en el HTML (left + center)
+    const buttons = Array.from(fr.querySelectorAll('.plus')).slice(0, 2);
+    let btnLeft   = buttons[0] || null;
+    let btnCenter = buttons[1] || null;
+
+    // Creamos botón derecho real SOLO si estamos en gráficos
+    const modo = document.getElementById("movimientos")?.dataset?.modo || 'lista';
+    let btnRight = document.getElementById('btnRightReal');
+
+    if (modo === 'graficos' || modo === 'graficos2') {
+      if (!btnRight) {
+        btnRight = document.createElement('button');
+        btnRight.id = 'btnRightReal';
+        btnRight.className = 'plus';
+        fr.appendChild(btnRight);
+      }
+    } else {
+      if (btnRight) btnRight.remove();
+      btnRight = null;
+    }
+    return { btnLeft, btnCenter, btnRight };
   }
-  function layoutFooterReset(btnLeft, btnCenter){
-    [btnLeft, btnCenter].forEach(b=>{
+
+  function layoutFooterReset(btnLeft, btnCenter, btnRight){
+    [btnLeft, btnCenter, btnRight].forEach(b=>{
       if (!b) return;
       b.style.position = ""; b.style.left = ""; b.style.top = ""; b.style.transform = "";
       b.style.opacity = "1"; b.style.display = ""; b.style.pointerEvents = "";
     });
   }
-  function _recentrarCasa(container, btnLeft, btnCenter) {
+
+  function _recentrarCasa(container, btnLeft, btnCenter, btnRight) {
     if (!container || !btnLeft || !btnCenter) return;
+
     requestAnimationFrame(() => {
       const fr = container.getBoundingClientRect();
       const l  = btnLeft.getBoundingClientRect();
       const c  = btnCenter.getBoundingClientRect();
 
-      // Usamos el “ancla” del centro (posición donde históricamente estaba el 3º botón) o el centro del footer
-      const anchorX = (typeof footerAnchors.centerX === 'number')
-        ? (fr.left + footerAnchors.centerX + (btnCenter.offsetWidth || 0)/2)
-        : (fr.left + (container.clientWidth/2));
+      let rightRect;
+      const rightVisible = !!(btnRight && getComputedStyle(btnRight).display !== 'none' && btnRight.style.pointerEvents !== 'none' && btnRight.style.opacity !== '0');
+      if (rightVisible) {
+        rightRect = btnRight.getBoundingClientRect();
+      } else {
+        const estLeft = (typeof footerAnchors.centerX === 'number')
+          ? footerAnchors.centerX
+          : ((container.clientWidth / 2) - (c.width / 2));
+        rightRect = { left: fr.left + estLeft, width: c.width };
+      }
 
-      const leftMid  = l.left + l.width/2;
-      const rightMid = anchorX;
-      const targetMid = (leftMid + rightMid) / 2;
+      const centerLeft  = (l.left - fr.left) + (l.width / 2);
+      const centerRight = (rightRect.left - fr.left) + (rightRect.width / 2);
+      const centerCasa  = (centerLeft + centerRight) / 2;
+      const casaLeft    = Math.round(centerCasa - (c.width / 2));
 
-      const casaLeft = Math.round((targetMid - fr.left) - (c.width/2));
       btnCenter.style.position  = 'absolute';
       btnCenter.style.top       = '50%';
       btnCenter.style.transform = 'translateY(-50%)';
       btnCenter.style.left      = `${casaLeft}px`;
     });
   }
-  function layoutFooterGrafico1(container, btnLeft, btnCenter){
+
+  function layoutFooterGrafico1(container, btnLeft, btnCenter, btnRight){
     if (!container || !btnLeft || !btnCenter) return;
     const cs = getComputedStyle(container); if (cs.position === 'static') container.style.position = 'relative';
-    const xLeft = (footerAnchors.leftX != null) ? footerAnchors.leftX : 20;
 
-    [btnLeft, btnCenter].forEach(b=>{ 
-      b.style.position='absolute'; b.style.top='50%'; b.style.transform='translateY(-50%)'; 
+    const SIZE   = footerAnchors.size || 65;
+    const xLeft  = (footerAnchors.leftX != null)   ? footerAnchors.leftX : 20;
+    const xRight = (footerAnchors.centerX != null) ? footerAnchors.centerX : ((container.clientWidth/2) - (SIZE/2));
+
+    [btnLeft, btnCenter].forEach(b=>{
+      b.style.position='absolute'; b.style.top='50%'; b.style.transform='translateY(-50%)';
     });
     btnLeft.style.left  = `${xLeft}px`;
 
+    if (btnRight){
+      btnRight.style.position   = 'absolute';
+      btnRight.style.top        = '50%';
+      btnRight.style.transform  = 'translateY(-50%)';
+      btnRight.style.left       = `${xRight}px`;
+      btnRight.style.display    = '';
+      btnRight.style.opacity    = '1';
+      btnRight.style.pointerEvents = 'auto';
+    }
+
     const cont = document.querySelector('.footer-controles'); if (cont) cont.style.display = fullscreenMode ? 'none' : '';
-    _recentrarCasa(container, btnLeft, btnCenter);
+    _recentrarCasa(container, btnLeft, btnCenter, btnRight);
   }
-  function layoutFooterGrafico2(container, btnLeft, btnCenter){
+
+  function layoutFooterGrafico2(container, btnLeft, btnCenter, btnRight){
     if (!container || !btnLeft || !btnCenter) return;
     const cs = getComputedStyle(container); if (cs.position === 'static') container.style.position = 'relative';
+
     const xLeft = (footerAnchors.leftX != null) ? footerAnchors.leftX : 20;
 
-    [btnLeft, btnCenter].forEach(b=>{ 
-      b.style.position='absolute'; b.style.top='50%'; b.style.transform='translateY(-50%)'; 
+    [btnLeft, btnCenter].forEach(b=>{
+      b.style.position='absolute'; b.style.top='50%'; b.style.transform='translateY(-50%)';
     });
-    btnLeft.style.left  = `${xLeft}px`;
+    btnLeft.style.left = `${xLeft}px`;
+
+    if (btnRight){
+      btnRight.style.display = 'none';
+      btnRight.style.pointerEvents = 'none';
+      btnRight.style.opacity = '0';
+    }
 
     const cont = document.querySelector('.footer-controles'); if (cont) cont.style.display = fullscreenMode ? 'none' : '';
-    _recentrarCasa(container, btnLeft, btnCenter);
+    _recentrarCasa(container, btnLeft, btnCenter, null);
   }
 
-  // ===== BALANCE (se mantiene igual)
-  function getBalanceRightOffset(container){
-    try{
-      const resetBtn = Array.from(document.querySelectorAll('.footer-controles .btn-small')).find(b => /reset/i.test((b.textContent||'').trim()));
-      if (!resetBtn || !container) return 20;
-      const contRect = container.getBoundingClientRect();
-      const resetRect = resetBtn.getBoundingClientRect();
-      return Math.max(0, Math.round(contRect.right - resetRect.right));
-    }catch(e){ return 20; }
+  // ==========================
+  // BALANCE — opción B (misma posición relativa al footer en todos los modos)
+  // ==========================
+  function captureBalanceRef(){
+    try {
+      const footerRow = document.querySelector('.footer-row');
+      const balanceEl = document.getElementById('balance');
+      if (!footerRow || !balanceEl) return;
+      const contRect = footerRow.getBoundingClientRect();
+      const balRect  = balanceEl.getBoundingClientRect();
+      // Distancia desde el borde derecho del footer al borde derecho del balance
+      balanceRightRef = Math.max(0, Math.round(contRect.right - balRect.right));
+    } catch { /* noop */ }
   }
-  function layoutBalanceFixed(container, balanceEl){
-    if (!container || !balanceEl) return;
-    const cs = getComputedStyle(container); if (cs.position === 'static') container.style.position = 'relative';
-    const rightOffset = getBalanceRightOffset(container);
-    balanceEl.style.position='absolute';
-    balanceEl.style.right= rightOffset + 'px';
-    balanceEl.style.top='50%';
-    balanceEl.style.transform='translateY(-50%)';
+
+  function layoutBalanceFixedUnified(){
+    const footerRow = document.querySelector('.footer-row');
+    const balanceEl = document.getElementById('balance');
+    if (!footerRow || !balanceEl) return;
+
+    if (getComputedStyle(footerRow).position === 'static') footerRow.style.position = 'relative';
+
+    // Si no tenemos referencia aún, usa padding-right del footer como aproximación natural
+    let rightOffset = balanceRightRef;
+    if (rightOffset == null) {
+      const footer = document.querySelector('.footer-controles');
+      const pr = footer ? parseFloat(getComputedStyle(footer).paddingRight || '12') : 12;
+      rightOffset = Math.max(0, Math.round(pr));
+    }
+
+    balanceEl.style.position  = 'absolute';
+    balanceEl.style.top       = '50%';
+    balanceEl.style.transform = 'translateY(-50%)';
+    balanceEl.style.right     = `${rightOffset}px`;
   }
-  function layoutBalanceReset(balanceEl){
+
+  function layoutBalanceResetUnified(){
+    const balanceEl = document.getElementById('balance');
     if (!balanceEl) return;
-    balanceEl.style.position='';
-    balanceEl.style.right='';
-    balanceEl.style.top='';
-    balanceEl.style.transform='';
+    balanceEl.style.position  = '';
+    balanceEl.style.right     = '';
+    balanceEl.style.top       = '';
+    balanceEl.style.transform = '';
   }
 
   // ==========================
@@ -418,21 +496,13 @@ if (window.__APP_LOADED__) {
   // ==========================
   function mostrar() {
     const movDiv = document.getElementById("movimientos"); if (!movDiv || movDiv.dataset.permiso !== "OK") return;
-
-    const filtros = document.querySelector('.filtros-wrapper');
-    const footerB = document.querySelector('.footer-controles');
-    const listaDiv = document.getElementById("lista");
-    const modo = movDiv.dataset.modo || "lista";
-
-    // Visibilidad UI (según fullscreenMode)
+    const filtros = document.querySelector('.filtros-wrapper'); const footerB = document.querySelector('.footer-controles');
     if (filtros) filtros.style.display = fullscreenMode ? 'none' : '';
     if (footerB) footerB.style.display  = fullscreenMode ? 'none' : '';
 
-    // Filtros de datos
     const fsIds = ["filtroMes","filtroAño","filtroCat","filtroSub","filtroOri"];
     const fs = fsIds.map(id => { const el = document.getElementById(id); return el ? el.value : "TODOS"; });
 
-    // Filtrado + orden
     filtradosGlobal = (movimientos || [])
       .filter(m => {
         const d = (m.f || "").split("-");
@@ -445,10 +515,9 @@ if (window.__APP_LOADED__) {
       })
       .sort((a,b) => new Date(b.f) - new Date(a.f));
 
-    // Balance — color por umbral
+    // Balance (texto/color)
     let t = 0; for (let i=0;i<filtradosGlobal.length;i++){ const m = filtradosGlobal[i]; if (!hideCasa || !isCasaCategory(m.c)) t += Number(m.imp)||0; }
-    const factor = (fs[0] === "TODOS") ? 12 : 1;
-    const balanceEl = document.getElementById("balance");
+    const factor = (fs[0] === "TODOS") ? 12 : 1; const balanceEl = document.getElementById("balance");
     if (balanceEl){
       balanceEl.textContent = t.toFixed(2) + " €";
       if (t < 0) balanceEl.style.color = "var(--danger)";
@@ -457,39 +526,32 @@ if (window.__APP_LOADED__) {
       else balanceEl.style.color = "var(--electric-blue)";
     }
 
-    // Footer: botones reales (sin placeholders)
     const footerRow = document.querySelector('.footer-row');
-    const plus = ensureTwoPlusButtons();
-    const btnLeft   = plus[0] || null;
-    const btnCenter = plus[1] || null;
+    const { btnLeft, btnCenter, btnRight } = ensureRealButtons();
+    const modo = movDiv.dataset.modo || "lista";
 
-    [btnLeft, btnCenter].forEach(b=>{
+    [btnLeft, btnCenter, btnRight].forEach(b=>{
       if (!b) return;
       b.onclick = null; b.ondblclick = null;
       b.classList.remove("plus-like","btn-house-anim","active");
       b.style.opacity = "1"; b.style.display = ""; b.style.pointerEvents="";
       b.style.position=""; b.style.left=""; b.style.top=""; b.style.transform="";
     });
-    layoutFooterReset(btnLeft, btnCenter);
+    layoutFooterReset(btnLeft, btnCenter, btnRight);
 
     const aplicarEstadoCasa = () => { if (btnCenter) btnCenter.classList.toggle("active", !!hideCasa); };
+
+    const listaDiv = document.getElementById("lista");
 
     if (modo === "graficos") {
       try { captureFooterAnchors(); } catch {}
 
       if (btnLeft){ btnLeft.innerHTML = iconBack(); btnLeft.onclick = () => setModo("lista"); }
-      if (btnCenter){ 
-        btnCenter.innerHTML = iconCasa(); 
-        btnCenter.classList.add("btn-house-anim"); 
-        // tap: toggle ocultar/mostrar “casa”
-        btnCenter.onclick = () => { toggleCasa(); aplicarEstadoCasa(); };
-        // doble‑tap: cambiar a G2
-        btnCenter.ondblclick = (ev) => { ev.preventDefault(); setModo("graficos2"); };
-        aplicarEstadoCasa();
-      }
+      if (btnCenter){ btnCenter.innerHTML = iconCasa(); btnCenter.classList.add("btn-house-anim"); btnCenter.onclick = () => { toggleCasa(); aplicarEstadoCasa(); }; aplicarEstadoCasa(); }
+      if (btnRight){ btnRight.innerHTML = iconGraph2(); btnRight.onclick = () => setModo("graficos2"); }
 
-      layoutFooterGrafico1(footerRow, btnLeft, btnCenter);
-      layoutBalanceFixed(footerRow, balanceEl);
+      layoutFooterGrafico1(footerRow, btnLeft, btnCenter, btnRight);
+      layoutBalanceFixedUnified();
 
       if (listaDiv) {
         listaDiv.innerHTML = "";
@@ -499,17 +561,11 @@ if (window.__APP_LOADED__) {
       try { captureFooterAnchors(); } catch {}
 
       if (btnLeft){ btnLeft.innerHTML = iconBack(); btnLeft.onclick = () => setModo("graficos"); }
-      if (btnCenter){ 
-        btnCenter.innerHTML = iconCasa(); 
-        btnCenter.classList.add("btn-house-anim"); 
-        btnCenter.onclick = () => { toggleCasa(); aplicarEstadoCasa(); };
-        // doble‑tap: volver a G1
-        btnCenter.ondblclick = (ev) => { ev.preventDefault(); setModo("graficos"); };
-        aplicarEstadoCasa();
-      }
+      if (btnCenter){ btnCenter.innerHTML = iconCasa(); btnCenter.classList.add("btn-house-anim"); btnCenter.onclick = () => { toggleCasa(); aplicarEstadoCasa(); }; aplicarEstadoCasa(); }
+      if (btnRight){ btnRight.style.display = 'none'; btnRight.style.pointerEvents = 'none'; btnRight.style.opacity = '0'; }
 
-      layoutFooterGrafico2(footerRow, btnLeft, btnCenter);
-      layoutBalanceFixed(footerRow, balanceEl);
+      layoutFooterGrafico2(footerRow, btnLeft, btnCenter, btnRight);
+      layoutBalanceFixedUnified();
 
       if (listaDiv) {
         listaDiv.innerHTML = "";
@@ -517,11 +573,11 @@ if (window.__APP_LOADED__) {
       }
     } else {
       // LISTA
-      if (btnLeft){ btnLeft.innerHTML = iconBars(); btnLeft.classList.add("plus-like"); btnLeft.onclick = () => setModo("graficos"); }
+      if (btnLeft){ btnLeft.innerHTML = iconBars(); btnLeft.classList.add("plus-like"); btnLeft.onclick = () => { captureBalanceRef(); setModo("graficos"); }; }
       if (btnCenter){ btnCenter.innerHTML = "+"; btnCenter.onclick = () => abrirFormulario(); }
 
-      layoutFooterReset(btnLeft, btnCenter);
-      layoutBalanceReset(balanceEl);
+      layoutFooterReset(btnLeft, btnCenter, btnRight);
+      layoutBalanceResetUnified();
 
       if (listaDiv) {
         const rows = filtradosGlobal
@@ -536,22 +592,24 @@ if (window.__APP_LOADED__) {
         listaDiv.innerHTML = rows;
         const loader = document.getElementById("loader"); if (loader) loader.style.display = "none";
       }
+
+      // Cada vez que estemos en Lista, refrescamos la referencia del balance por si cambió el layout/CSS
+      captureBalanceRef();
     }
+
+    ensureBackupIndicator(); updateBackupIndicator();
   }
 
-  // Reajustes al cambiar tamaño: re‑aplica layouts en gráficos
+  // Reajustes al cambiar tamaño: re‑aplica layouts en gráficos (y balance unificado)
   window.addEventListener('resize', debounce(function(){
     const movDiv = document.getElementById("movimientos");
     if (!movDiv) return; const modo = movDiv.dataset.modo || "lista";
     if (modo !== "graficos" && modo !== "graficos2") return;
     const footerRow = document.querySelector(".footer-row");
-    const plus = document.querySelectorAll(".footer-row .plus");
-    const btnLeft = plus[0] || null;
-    const btnCenter = plus[1] || null;
-    const balanceEl = document.getElementById('balance');
-    if (modo === "graficos") layoutFooterGrafico1(footerRow, btnLeft, btnCenter);
-    else layoutFooterGrafico2(footerRow, btnLeft, btnCenter);
-    layoutBalanceFixed(footerRow, balanceEl);
+    const { btnLeft, btnCenter, btnRight } = ensureRealButtons();
+    if (modo === "graficos") layoutFooterGrafico1(footerRow, btnLeft, btnCenter, btnRight);
+    else layoutFooterGrafico2(footerRow, btnLeft, btnCenter, btnRight);
+    layoutBalanceFixedUnified();
   }, 150));
 
   // ==========================
@@ -657,7 +715,7 @@ if (window.__APP_LOADED__) {
     const oldChart = lista.querySelector('.g2-wrap'); if (oldChart) oldChart.remove();
 
     const fsIds = ["filtroMes","filtroAño","filtroCat","filtroSub","filtroOri"];
-    const fs = fsIds.map(id => { const el = document.getElementById(id); return el ? el.value : "TODOS"; });
+    theFs = fsIds.map(id => { const el = document.getElementById(id); return el ? el.value : "TODOS"; });
 
     const hoy = new Date();
     const meses = [];
@@ -668,16 +726,15 @@ if (window.__APP_LOADED__) {
     }
 
     const filtraOtros = (m) => {
-      const cC = fs[2] === "TODAS" || m.c === fs[2];
-      const cS = fs[3] === "TODAS" || m.s === fs[3];
-      const cO = fs[4] === "TODOS" || m.o === fs[4];
+      const cC = theFs[2] === "TODAS" || m.c === theFs[2];
+      const cS = theFs[3] === "TODAS" || m.s === theFs[3];
+      const cO = theFs[4] === "TODOS" || m.o === theFs[4];
       return cC && cS && cO;
     };
     const base = (hideCasa ? movimientos.filter(mm => !isCasaCategory(mm.c)) : movimientos).filter(filtraOtros);
     const sumaMes = new Map();
     for (let mov of base) {
       const k = (mov.f || "").slice(0,7);
-      if (!meses.some(x => x.key === k)) continue;
       sumaMes.set(k, (sumaMes.get(k) || 0) + (Number(mov.imp) || 0));
     }
 
@@ -746,7 +803,7 @@ if (window.__APP_LOADED__) {
   }
 
   // ==========================
-  // FORMULARIO / CRUD (igual)
+  // FORMULARIO / CRUD (igual que estabas)
   // ==========================
   function onOrigenChange(origenValor, { preCat = "", preSub = "", esEdicion = false } = {}) {
     const selCat = document.getElementById("categoria");
@@ -886,7 +943,7 @@ if (window.__APP_LOADED__) {
   };
 
   // ==========================
-  // GUARDAR + CRUD
+  // GUARDAR — robusto (números EU + value de selects)
   // ==========================
   const guardar = () => {
     const get = (id) => (document.getElementById(id)?.value ?? "").trim();
@@ -944,7 +1001,7 @@ if (window.__APP_LOADED__) {
     }
 
     localStorage.setItem('movimientos', JSON.stringify(movimientos));
-    scheduleSync('guardar');
+    scheduleSync('guardar'); // autosync Dropbox
     volver();
   };
 
@@ -965,14 +1022,15 @@ if (window.__APP_LOADED__) {
     actualizarListas(); resetPagina(); mostrar();
   };
 
-  // Aux
   const manejarNuevo = (el, tipo) => {
     if (el.value !== "+") return;
     let n = el.dataset.nuevoValor || "";
     el.dataset.nuevoValor = "";
     if (!n) { el.value = ""; return; }
+
     const pretty = mostrarBonito(n.trim());
     const keyNew = canonicalizeLabel(pretty);
+
     if (tipo === "categoria") {
       const catIdx = buildCanonIndex(catBase, catExtra);
       if (NOMINA_CATS.some(x => canonicalizeLabel(x) === keyNew)) {
@@ -1001,6 +1059,7 @@ if (window.__APP_LOADED__) {
   const borrarElemento = (tipo) => {
     const select = document.getElementById(tipo);
     const val = select && select.value; if (!val) return;
+
     if (tipo === 'categoria') {
       const idx = catExtra.indexOf(val);
       if (idx >= 0) {
@@ -1131,7 +1190,7 @@ if (window.__APP_LOADED__) {
   }, { passive: true });
 
   // ==========================
-  // CSV / BACKUPS / SW / DROPBOX / AUTOSYNC — Igual a estable
+  // CSV / BACKUPS / SW / DROPBOX / AUTOSYNC — Íntegro como tenías
   // ==========================
   const exportarCSV = () => {
     if (!movimientos || movimientos.length === 0) { alert("No hay datos para exportar."); return; }
@@ -1272,7 +1331,7 @@ if (window.__APP_LOADED__) {
   };
 
   // ==========================
-  // BACKUPS / INDICADOR / SW / DROPBOX / AUTOSYNC
+  // BACKUPS (rotativo) + INDICADOR + SW + DROPBOX + AUTOSYNC (sin cambios funcionales)
   // ==========================
   async function createAndStoreLocalBackup(){
     const enc = await encryptBackup(buildBackupObject());
@@ -1542,22 +1601,26 @@ if (window.__APP_LOADED__) {
   // EXPORTAR A GLOBAL (para HTML)
   // ==========================
   function resetTotal(){ /* noop */ }
+  // PIN
   window.pressPin = pressPin; window.clearPin = clearPin; window.biometricAuth = biometricAuth;
 
+  // Navegación y acciones
   window.resetPagina = resetPagina; window.mostrar = mostrar; window.abrirFormulario = abrirFormulario; window.volver = volver;
   window.eliminarRegistroActual = eliminarRegistroActual; window.exportarCSV = exportarCSV; window.importarCSV = importarCSV;
-  window.manejarNuevo = manejarNuevo; window.borrarElemento = borrarElemento; window.abrirGraficos = abrirGraficos;
+  window.manejarNuevo = manejarNuevo; window.borrarElemento = borrarElemento; window.abrirGraficos = abrirGraficos; window.ejecutarBackupRotativo = ejecutarBackupRotativo; window.init = init; window.actualizarListas = actualizarListas;
 
-  window.ejecutarBackupRotativo = ejecutarBackupRotativo; window.init = init; window.actualizarListas = actualizarListas;
-
+  // Vistas/Modo
   window.setModo = setModo; window.toggleCasa = toggleCasa;
 
+  // Gráficos (drill)
   window.handleGraficoBarClick = handleGraficoBarClick; window.abrirDetalleMovs = abrirDetalleMovs;
 
-  window.dropboxStartLogin = dropboxStartLogin; window.dropboxUploadEncryptedBackup = dropboxUploadEncryptedBackup;
-  window.dropboxDownloadAndRestore = dropboxDownloadAndRestore; window.dropboxSignOut = dropboxSignOut;
+  // Dropbox
+  window.dropboxStartLogin = dropboxStartLogin; window.dropboxUploadEncryptedBackup = dropboxUploadEncryptedBackup; window.dropboxDownloadAndRestore = dropboxDownloadAndRestore; window.dropboxSignOut = dropboxSignOut;
 
+  // Backup
   window.createAndStoreLocalBackup = createAndStoreLocalBackup;
 
+  // imprescindible para onclick="guardar()"
   window.guardar = guardar;
 }
