@@ -1,4 +1,4 @@
-// === main.js (Import/Export con botón VOLVER en la propia pantalla + rotación + popup Nómina solo en creación + fix Guardar + export global) ===
+// === main.js (Import/Export con botón VOLVER inferior + botones unificados + rotación armada en gráficos + balance sin mover en gráficos) ===
 if (window.__APP_LOADED__) {
   // Ya cargado: no re-evaluar
 } else {
@@ -28,6 +28,10 @@ if (window.__APP_LOADED__) {
   let pinActual = "";
   let hideCasa = false;
   let fullscreenMode = false;
+
+  // Flag para rotación armada por doble toque en gráficos
+  let rotateReady = false;
+  let rotateReadyTimer = null;
 
   // Escape seguro para HTML (renders)
   function esc(s){
@@ -175,7 +179,7 @@ if (window.__APP_LOADED__) {
   }
 
   // ==========================
-  // ENLACE GUARDAR + GESTOS
+  // ENLACE GUARDAR + GESTOS (incluye armar rotación)
   // ==========================
   function bindGuardarHandlers() {
     const form = document.getElementById('form');
@@ -190,6 +194,15 @@ if (window.__APP_LOADED__) {
     }
   }
 
+  function armRotateReady() {
+    const modo = (document.getElementById("movimientos")?.dataset?.modo) || "lista";
+    if (modo === "graficos" || modo === "graficos2") {
+      rotateReady = true;
+      clearTimeout(rotateReadyTimer);
+      rotateReadyTimer = setTimeout(() => { rotateReady = false; }, 8000); // armado 8s
+    }
+  }
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       ensureDefaultPinHash().catch(console.error);
@@ -197,31 +210,29 @@ if (window.__APP_LOADED__) {
       if (document.documentElement) document.documentElement.style.touchAction = 'manipulation';
       if (document.body)           document.body.style.touchAction           = 'manipulation';
 
-      // Doble-tap/dblclick para UI fullscreen
+      // Doble-tap/dblclick → arma rotación (solo si estás en gráficos)
       let _lastTap = 0; const TAP_WINDOW = 250;
-      const filtrosSel = '.filtros-wrapper';
-      const footerSel  = '.footer-controles';
-      const isInteractive = (el) => {
-        if (!el) return false;
-        if (el.closest(filtrosSel) || el.closest(footerSel)) return true;
-        return !!el.closest('button, a, select, input, textarea, label, [role="button"], [tabindex]');
-      };
-      const applyUIVisibility = () => {
-        const filtros = document.querySelector(filtrosSel);
-        const footer  = document.querySelector(footerSel);
-        if (filtros) filtros.style.display = fullscreenMode ? 'none' : '';
-        if (footer)  footer.style.display  = fullscreenMode ? 'none' : '';
-      };
-      const toggleFullscreenUI = () => {
-        fullscreenMode = !fullscreenMode; applyUIVisibility(); requestAnimationFrame(() => mostrar());
-        try { sessionStorage.setItem('ui_fullscreen', fullscreenMode ? '1' : '0'); } catch {}
-      };
-      try { const prev = sessionStorage.getItem('ui_fullscreen'); if (prev === '1') { fullscreenMode = true; applyUIVisibility(); } } catch {}
+      const isInteractive = (el) => !!(el && el.closest('button, a, select, input, textarea, label, [role="button"], [tabindex]'));
+
       window.addEventListener('touchstart', (ev) => {
-        const t = Date.now(); const target = ev.target; if (isInteractive(target)) return;
-        if (t - _lastTap <= TAP_WINDOW) { ev.preventDefault(); toggleFullscreenUI(); _lastTap = 0; } else { _lastTap = t; }
+        const t = Date.now();
+        const target = ev.target;
+        if (isInteractive(target)) return;
+        if (t - _lastTap <= TAP_WINDOW) {
+          ev.preventDefault();
+          armRotateReady();
+          _lastTap = 0;
+        } else {
+          _lastTap = t;
+        }
       }, { passive: false });
-      window.addEventListener('dblclick', (ev) => { const target = ev.target; if (isInteractive(target)) return; ev.preventDefault(); toggleFullscreenUI(); }, { passive: false });
+
+      window.addEventListener('dblclick', (ev) => {
+        const target = ev.target;
+        if (isInteractive(target)) return;
+        ev.preventDefault();
+        armRotateReady();
+      }, { passive: false });
 
       // Enlazar Guardar
       bindGuardarHandlers();
@@ -230,13 +241,23 @@ if (window.__APP_LOADED__) {
       const bal = document.getElementById('balance');
       if (bal) bal.onclick = () => setModo('importexport');
 
-      // Botón VOLVER de Import/Export (en la propia pantalla)
+      // Botón VOLVER (Import/Export, fijo inferior)
       const ieVolver = document.getElementById('ieVolver');
       if (ieVolver) ieVolver.onclick = () => setModo('lista');
     });
   } else {
     bindGuardarHandlers();
   }
+
+  // Rotación: solo si está armado (tras doble tap) y en gráficos
+  window.addEventListener('orientationchange', () => {
+    const modo = (document.getElementById("movimientos")?.dataset?.modo) || "lista";
+    if ((modo === "graficos" || modo === "graficos2") && rotateReady) {
+      try { captureFooterAnchors(); } catch {}
+      mostrar();
+      rotateReady = false; // se desarma tras usar
+    }
+  });
 
   // ==========================
   // ICONOS SVG
@@ -329,8 +350,7 @@ if (window.__APP_LOADED__) {
     btnLeft.style.left  = `${xLeft}px`;
     btnRight.style.left = `${xG2}px`;
     btnRight.style.display = ''; btnRight.style.opacity = '1'; btnRight.style.pointerEvents = 'auto';
-    const cont = document.querySelector('.footer-controles'); if (cont) cont.style.display = fullscreenMode ? 'none' : '';
-    _recentrarCasa(container, btnLeft, btnCenter, btnRight);
+    // ❌ No reubicamos balance para mantenerlo EXACTAMENTE como en Movimientos
   }
   function layoutFooterGrafico2(container, btnLeft, btnCenter, btnRight){
     if (!container || !btnLeft || !btnCenter || !btnRight) return;
@@ -339,13 +359,7 @@ if (window.__APP_LOADED__) {
     [btnLeft, btnCenter, btnRight].forEach(b=>{ b.style.position='absolute'; b.style.top='50%'; b.style.transform='translateY(-50%)'; });
     btnLeft.style.left = `${xLeft}px`;
     btnRight.style.opacity='0'; btnRight.style.left='-9999px'; btnRight.style.pointerEvents='none';
-    const cont = document.querySelector('.footer-controles'); if (cont) cont.style.display = fullscreenMode ? 'none' : '';
-    _recentrarCasa(container, btnLeft, btnCenter, btnRight);
-  }
-  function layoutBalanceFixed(container, balanceEl){
-    if (!container || !balanceEl) return;
-    const cs = getComputedStyle(container); if (cs.position === 'static') container.style.position = 'relative';
-    // El balance ya tiene estilo propio
+    // ❌ No reubicamos balance
   }
 
   // ==========================
@@ -358,19 +372,19 @@ if (window.__APP_LOADED__) {
     const impPage  = document.getElementById("importExport");
     const modo = movDiv.dataset.modo || "lista";
 
-    // Ocultar siempre el overlay import/export si no estamos en ese modo
+    // Ocultar overlay Import/Export si no estamos en ese modo
     if (impPage) impPage.classList.add('hidden');
 
-    // === NUEVO MODO IMPORT/EXPORT ===
+    // === Import/Export ===
     if (modo === "importexport") {
       if (filtros) filtros.style.display = 'none';
-      if (footerB) footerB.style.display  = '';  // puede dejarse visible; el overlay está por encima
+      if (footerB) footerB.style.display  = '';   // el overlay cubre
       if (impPage) impPage.classList.remove('hidden');
-      if (listaDiv) listaDiv.innerHTML = "";     // no hay lista en esta vista
+      if (listaDiv) listaDiv.innerHTML = "";
       return;
     }
 
-    // Modos tradicionales (lista, graficos, graficos2)
+    // Modos tradicionales
     if (filtros) filtros.style.display = fullscreenMode ? 'none' : '';
     if (footerB) footerB.style.display  = fullscreenMode ? 'none' : '';
 
@@ -412,7 +426,6 @@ if (window.__APP_LOADED__) {
       if (btnCenter){ btnCenter.innerHTML = iconCasa(); btnCenter.classList.add("btn-house-anim"); btnCenter.onclick = () => { hideCasa = !hideCasa; btnCenter.classList.toggle("active", !!hideCasa); mostrar(); }; }
       if (btnRight){ btnRight.style.display = ""; btnRight.style.opacity = "1"; btnRight.style.pointerEvents = "auto"; btnRight.innerHTML = iconGraph2(); btnRight.onclick = () => setModo("graficos2"); }
       layoutFooterGrafico1(footerRow, btnLeft, btnCenter, btnRight);
-      layoutBalanceFixed(footerRow, balanceEl);
 
       if (listaDiv) {
         listaDiv.innerHTML = "";
@@ -423,7 +436,6 @@ if (window.__APP_LOADED__) {
       if (btnCenter){ btnCenter.innerHTML = iconCasa(); btnCenter.classList.add("btn-house-anim"); btnCenter.onclick = () => { hideCasa = !hideCasa; btnCenter.classList.toggle("active", !!hideCasa); mostrar(); }; }
       if (btnRight){ btnRight.innerHTML = ""; btnRight.onclick = null; btnRight.style.display = "none"; btnRight.style.pointerEvents = "none"; }
       layoutFooterGrafico2(footerRow, btnLeft, btnCenter, btnRight);
-      layoutBalanceFixed(footerRow, balanceEl);
 
       if (listaDiv) {
         listaDiv.innerHTML = "";
@@ -438,8 +450,6 @@ if (window.__APP_LOADED__) {
         btnRight.style.position = ""; btnRight.style.left = ""; btnRight.style.top = "";
         btnRight.style.transform = ""; btnRight.style.opacity = "0";
       }
-      layoutFooterReset(btnLeft, btnCenter, btnRight);
-      layoutBalanceFixed(footerRow, balanceEl);
 
       if (listaDiv) {
         const rows = filtradosGlobal
@@ -455,10 +465,11 @@ if (window.__APP_LOADED__) {
         const loader = document.getElementById("loader"); if (loader) loader.style.display = "none";
       }
     }
+
     ensureBackupIndicator(); updateBackupIndicator();
   }
 
-  // Reajustes al cambiar tamaño y orientación (rotación)
+  // Reajustes al cambiar tamaño (solo necesarios en gráficos para anclajes)
   window.addEventListener('resize', debounce(function(){
     const movDiv = document.getElementById("movimientos");
     if (!movDiv) return; const modo = movDiv.dataset.modo || "lista";
@@ -468,15 +479,9 @@ if (window.__APP_LOADED__) {
     const btnLeft = plus[0] || null;
     const btnCenter = plus[1] || null;
     const btnRight = plus[2] || null;
-    const balanceEl = document.getElementById('balance');
     if (modo === "graficos") layoutFooterGrafico1(footerRow, btnLeft, btnCenter, btnRight);
     else layoutFooterGrafico2(footerRow, btnLeft, btnCenter, btnRight);
-    layoutBalanceFixed(footerRow, balanceEl);
   }, 150));
-  window.addEventListener('orientationchange', () => {
-    try { captureFooterAnchors(); } catch {}
-    mostrar();
-  });
 
   // ==========================
   // GRÁFICOS 1 (barras) + DRILL
@@ -518,7 +523,9 @@ if (window.__APP_LOADED__) {
       return `
       <div class="card" style="border:none;background:transparent;cursor:pointer" data-label="${esc(label)}"
            onclick="handleGraficoBarClick(this.dataset.label)">
-        <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:5px"><span>${esc(label)}</span><b>${val.toFixed(2)} €</b></div>
+        <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:5px">
+          <span>${esc(label)}</span><b>${val.toFixed(2)} €</b>
+        </div>
         <div class="bar-flex">
           <div class="bar-segment" style="width:${(t1/val)*100}%;background:var(--electric-blue)"></div>
           <div class="bar-segment" style="width:${(t2/val)*100}%;background:var(--success)"></div>
@@ -573,102 +580,7 @@ if (window.__APP_LOADED__) {
   }
 
   // ==========================
-  // GRÁFICOS 2 (columnas)
-  // ==========================
-  function renderizarGraficos2() {
-    const lista = document.getElementById("lista");
-    const oldChart = lista.querySelector('.g2-wrap'); if (oldChart) oldChart.remove();
-
-    const fsIds = ["filtroMes","filtroAño","filtroCat","filtroSub","filtroOri"];
-    const fs = fsIds.map(id => { const el = document.getElementById(id); return el ? el.value : "TODOS"; });
-
-    const hoy = new Date();
-    const meses = [];
-    for (let i=12; i>=0; i--){
-      const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-      meses.push({ d, key });
-    }
-
-    const filtraOtros = (m) => {
-      const cC = fs[2] === "TODAS" || m.c === fs[2];
-      const cS = fs[3] === "TODAS" || m.s === fs[3];
-      const cO = fs[4] === "TODOS" || m.o === fs[4];
-      return cC && cS && cO;
-    };
-    const base = (hideCasa ? movimientos.filter(mm => !isCasaCategory(mm.c)) : movimientos).filter(filtraOtros);
-    const sumaMes = new Map();
-    for (let mov of base) {
-      const k = (mov.f || "").slice(0,7);
-      sumaMes.set(k, (sumaMes.get(k) || 0) + (Number(mov.imp) || 0));
-    }
-
-    const valores = meses.map(m => sumaMes.get(m.key) || 0);
-    const maxAbs = Math.max(...valores.map(v => Math.abs(v)), 1);
-    const minBar = 4;
-    const colorPorMes = (t) => {
-      if (t < 0) return "var(--danger)";
-      if (t <= 250) return "var(--warning)";
-      if (t <= 750) return "var(--success)";
-      return "var(--electric-blue)";
-    };
-    const mesesCorta = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-    const fmtEuro = (n) => { const v = Number(n)||0, s = v>=0?"+":"−", a = Math.abs(v).toFixed(2).replace(".",","); return `${s}${a} €`; };
-
-    let html = `
-      <div class="g2-wrap">
-        <div class="g2-chart" style="position:relative;height:180px;display:grid;grid-template-columns:repeat(13,1fr);gap:10px;align-items:center;margin-bottom:26px;">
-          <div class="g2-baseline" style="position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(212,175,55,.35)"></div>
-    `;
-    for (const m of meses){
-      const v = sumaMes.get(m.key) || 0;
-      const h = Math.max(minBar, (Math.abs(v)/maxAbs) * 80);
-      const pos = v >= 0;
-      const color = colorPorMes(v);
-      const mesIdx = new Date(m.key + "-01T00:00:00").getMonth();
-      const label = mesesCorta[mesIdx];
-      const tipText = `${label} ${m.d.getFullYear()}: ${fmtEuro(v)}`;
-      html += `
-      <div class="g2-col" data-key="${m.key}" style="position:relative;height:100%;">
-        <div class="g2-bar ${pos ? 'pos' : 'neg'}" data-h="${h}" style="height:0px;background:${color};"></div>
-        <div class="g2-tip ${pos ? 'tip-pos' : 'tip-neg'}">${tipText}</div>
-        <div class="g2-label" style="position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--primary)">${label}</div>
-      </div>
-      `;
-    }
-    html += `</div></div>`;
-    lista.insertAdjacentHTML('beforeend', html);
-
-    requestAnimationFrame(function(){
-      const bars = lista.querySelectorAll('.g2-chart .g2-bar');
-      for (let i=0;i<bars.length;i++){
-        const el = bars[i];
-        const target = parseFloat(el.getAttribute('data-h')) || 0;
-        el.style.height = target + 'px';
-      }
-    });
-
-    const chart = lista.querySelector('.g2-chart');
-    if (!chart) return;
-    if (!chart.getAttribute('data-tipBound')){
-      chart.addEventListener('click', function(ev){
-        const col = ev.target.closest('.g2-col'); if (!col) return;
-        const open = chart.querySelectorAll('.g2-col.show-tip');
-        for (let i=0;i<open.length;i++) if (open[i]!==col) open[i].classList.remove('show-tip');
-        col.classList.toggle('show-tip');
-      });
-      document.addEventListener('click', function(ev){
-        if (!chart.contains(ev.target)){
-          const open = chart.querySelectorAll('.g2-col.show-tip');
-          for (let i=0;i<open.length;i++) open[i].classList.remove('show-tip');
-        }
-      });
-      chart.setAttribute('data-tipBound','1');
-    }
-  }
-
-  // ==========================
-  // FORMULARIO / CRUD
+  // FORMULARIO / CRUD (sin cambios de fondo)
   // ==========================
   function onOrigenChange(origenValor, { preCat = "", preSub = "", esEdicion = false } = {}) {
     const selCat = document.getElementById("categoria");
@@ -973,9 +885,7 @@ if (window.__APP_LOADED__) {
     }
   };
 
-  // ==========================
-  // NORMALIZACIÓN RETROACTIVA
-  // ==========================
+  // Normalización retroactiva (igual a tu versión)
   function normalizarListasExistentes(){
     const vistosCat = new Set(Object.values(catBase).map(v => canonicalizeLabel(v)));
     const nuevaExtra = [];
@@ -1052,9 +962,7 @@ if (window.__APP_LOADED__) {
     }
   }, { passive: true });
 
-  // ==========================
-  // CSV / BACKUPS / SW / DROPBOX
-  // ==========================
+  // ===== CSV / BACKUPS / SW / DROPBOX (mismo que antes) =====
   const exportarCSV = () => {
     if (!movimientos || movimientos.length === 0) { alert("No hay datos para exportar."); return; }
     const SEP = ";";
@@ -1193,9 +1101,7 @@ if (window.__APP_LOADED__) {
     reader.readAsText(file, 'UTF-8');
   };
 
-  // ==========================
-  // BACKUPS (rotativo local + indicador)
-  // ==========================
+  // ===== Backups / SW / Dropbox / AutoSync (igual que antes) =====
   async function createAndStoreLocalBackup(){
     const enc = await encryptBackup(buildBackupObject());
     const idx = ((parseInt(localStorage.getItem('backup_idx')||'0',10)) % 5) + 1;
@@ -1251,9 +1157,6 @@ if (window.__APP_LOADED__) {
   }
   setInterval(updateBackupIndicator, 60000);
 
-  // ==========================
-  // SERVICE WORKER (PWA)
-  // ==========================
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function(){
       navigator.serviceWorker.register('./sw.js').catch(function(err){
@@ -1262,9 +1165,6 @@ if (window.__APP_LOADED__) {
     });
   }
 
-  // ==========================
-  // DROPBOX — PKCE + API v2
-  // ==========================
   const DBX_APP_KEY      = 'pow1k3kk53abk75';
   const DBX_REDIRECT_URI = 'https://oskarlm.github.io/APK_V0.0/auth/dropbox/callback';
   const DBX_FILE_PATH    = '/mis_gastos_backup.json';
@@ -1398,9 +1298,7 @@ if (window.__APP_LOADED__) {
 
   function dropboxSignOut(){ dbx_clearTokens(); alert('Dropbox desconectado en este dispositivo.'); }
 
-  // ==========================
-  // AUTO‑SYNC Dropbox
-  // ==========================
+  // AUTO‑SYNC
   let _syncTimer = null;
   async function autoSyncToDropbox(reason = 'changed') {
     try {
@@ -1478,7 +1376,7 @@ if (window.__APP_LOADED__) {
   // ==========================
   // EXPORTAR A GLOBAL (para HTML)
   // ==========================
-  function resetTotal(){ /* noop (si más adelante decides que borre todo, aquí se implementa) */ }
+  function resetTotal(){ /* noop por ahora */ }
   window.pressPin = pressPin; window.clearPin = clearPin; window.biometricAuth = biometricAuth;
   window.resetPagina = resetPagina; window.mostrar = mostrar; window.abrirFormulario = abrirFormulario; window.volver = volver; window.eliminarRegistroActual = eliminarRegistroActual; window.exportarCSV = exportarCSV; window.importarCSV = importarCSV; window.manejarNuevo = manejarNuevo; window.borrarElemento = borrarElemento; window.abrirGraficos = abrirGraficos; window.ejecutarBackupRotativo = ejecutarBackupRotativo; window.init = init; window.actualizarListas = actualizarListas;
 
