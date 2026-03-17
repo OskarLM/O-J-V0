@@ -155,27 +155,31 @@
     </div>
   </div>
 
-  <!-- IMPORT / EXPORT PAGE (overlay modo 'importexport') -->
-  <div id="importExport" class="hidden"
-       style="position:fixed;inset:0;display:flex;flex-direction:column;background:var(--bg);z-index:2000;">
-    <div class="topbar">IMPORT / EXPORT</div>
+<!-- IMPORT / EXPORT PAGE (overlay modo 'importexport') -->
+<div id="importExport" class="hidden"
+     style="position:fixed;inset:0;display:flex;flex-direction:column;background:var(--bg);z-index:2000;">
+  <div class="topbar">IMPORT / EXPORT</div>
 
-    <div class="container" style="padding-top:25px;">
-      <div style="max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:12px">
-        <button class="btn-small btn-gold" onclick="exportarCSV()">📊 Exportar CSV</button>
+  <div class="container" style="padding-top:25px;">
+    <!-- Acciones Import/Export unificadas -->
+    <div class="ie-actions">
+      <!-- Fila 1 -->
+      <button class="btn-gold btn-unified" onclick="exportarCSV()">📊 Exportar CSV</button>
+      <button class="btn-silver btn-unified" onclick="document.getElementById('inputFile2').click()">📥 Importar CSV</button>
+      <input id="inputFile2" class="hidden" type="file" onchange="importarCSV(event)" />
 
-        <button class="btn-small btn-silver" onclick="document.getElementById('inputFile2').click()">📥 Importar CSV</button>
-        <input id="inputFile2" class="hidden" type="file" onchange="importarCSV(event)" />
+      <!-- Fila 2 -->
+      <button class="btn-gold btn-unified" onclick="dropboxUploadEncryptedBackup()">📤 Guardar copia en Dropbox</button>
+      <button class="btn-silver btn-unified" onclick="dropboxDownloadAndRestore()">📥 Restaurar copia desde Dropbox</button>
 
-        <button class="btn-small"
-                style="background:#450a0a;color:var(--danger);border-color:var(--danger)"
-                onclick="resetTotal()">⚠️ Reset</button>
+      <!-- Fila 3 (Reset peligroso) -->
+      <button class="btn-unified btn-danger ie-span2" onclick="resetTotal()">⚠️ Reset</button>
 
-        <button class="btn-gold" onclick="dropboxUploadEncryptedBackup()">📤 Guardar copia en Dropbox</button>
-        <button class="btn-silver" onclick="dropboxDownloadAndRestore()">📥 Restaurar copia desde Dropbox</button>
-      </div>
+      <!-- Fila 4 (VOLVER) -->
+      <button id="ieVolver" class="btn-silver btn-unified ie-span2">⬅ VOLVER</button>
     </div>
   </div>
+</div>
 
   <!-- JS -->
   <script src="./js/utils.js?v=2"></script>
