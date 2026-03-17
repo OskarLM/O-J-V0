@@ -1,6 +1,6 @@
-// === main.js (Import/Export con botón VOLVER inferior + botones unificados + rotación armada en gráficos + balance sin mover en gráficos) ===
+// === main.js — estable: gráficos sin mover balance, Import/Export con volver inferior, doble‑tap (UI), rotación armada en gráficos, guardar robusto, Dropbox, PWA ===
 if (window.__APP_LOADED__) {
-  // Ya cargado: no re-evaluar
+  // Evitar doble carga
 } else {
   window.__APP_LOADED__ = true;
 
@@ -29,11 +29,11 @@ if (window.__APP_LOADED__) {
   let hideCasa = false;
   let fullscreenMode = false;
 
-  // Flag para rotación armada por doble toque en gráficos
+  // Rotación armada tras doble‑tap (solo gráficos)
   let rotateReady = false;
   let rotateReadyTimer = null;
 
-  // Escape seguro para HTML (renders)
+  // Escape seguro para HTML
   function esc(s){
     return (s ?? '')
       .toString()
@@ -179,7 +179,7 @@ if (window.__APP_LOADED__) {
   }
 
   // ==========================
-  // ENLACE GUARDAR + GESTOS (incluye armar rotación)
+  // ENLACE GUARDAR + DOBLE‑TAP (UI) + ROTACIÓN ARMADA
   // ==========================
   function bindGuardarHandlers() {
     const form = document.getElementById('form');
@@ -194,12 +194,21 @@ if (window.__APP_LOADED__) {
     }
   }
 
-  function armRotateReady() {
+  function toggleFullscreenUI() {
+    fullscreenMode = !fullscreenMode;
+    const filtros = document.querySelector('.filtros-wrapper');
+    const footer  = document.querySelector('.footer-controles');
+    if (filtros) filtros.style.display = fullscreenMode ? 'none' : '';
+    if (footer)  footer.style.display  = fullscreenMode ? 'none' : '';
+    requestAnimationFrame(() => mostrar());
+    try { sessionStorage.setItem('ui_fullscreen', fullscreenMode ? '1' : '0'); } catch {}
+  }
+  function armRotateIfGraficos(){
     const modo = (document.getElementById("movimientos")?.dataset?.modo) || "lista";
     if (modo === "graficos" || modo === "graficos2") {
       rotateReady = true;
       clearTimeout(rotateReadyTimer);
-      rotateReadyTimer = setTimeout(() => { rotateReady = false; }, 8000); // armado 8s
+      rotateReadyTimer = setTimeout(()=>{ rotateReady = false; }, 8000);
     }
   }
 
@@ -210,29 +219,30 @@ if (window.__APP_LOADED__) {
       if (document.documentElement) document.documentElement.style.touchAction = 'manipulation';
       if (document.body)           document.body.style.touchAction           = 'manipulation';
 
-      // Doble-tap/dblclick → arma rotación (solo si estás en gráficos)
+      // Doble‑tap: oculta/mostrar filtros + footer (en Movimientos y Gráficos) y arma rotación si estás en Gráficos
       let _lastTap = 0; const TAP_WINDOW = 250;
       const isInteractive = (el) => !!(el && el.closest('button, a, select, input, textarea, label, [role="button"], [tabindex]'));
-
       window.addEventListener('touchstart', (ev) => {
         const t = Date.now();
-        const target = ev.target;
-        if (isInteractive(target)) return;
+        const el = ev.target;
+        if (isInteractive(el)) return;
         if (t - _lastTap <= TAP_WINDOW) {
           ev.preventDefault();
-          armRotateReady();
+          toggleFullscreenUI();
+          armRotateIfGraficos();
           _lastTap = 0;
         } else {
           _lastTap = t;
         }
       }, { passive: false });
-
       window.addEventListener('dblclick', (ev) => {
-        const target = ev.target;
-        if (isInteractive(target)) return;
+        const el = ev.target;
+        if (isInteractive(el)) return;
         ev.preventDefault();
-        armRotateReady();
+        toggleFullscreenUI();
+        armRotateIfGraficos();
       }, { passive: false });
+      try { const prev = sessionStorage.getItem('ui_fullscreen'); if (prev === '1') { fullscreenMode = true; toggleFullscreenUI(); } } catch {}
 
       // Enlazar Guardar
       bindGuardarHandlers();
@@ -241,7 +251,7 @@ if (window.__APP_LOADED__) {
       const bal = document.getElementById('balance');
       if (bal) bal.onclick = () => setModo('importexport');
 
-      // Botón VOLVER (Import/Export, fijo inferior)
+      // Botón VOLVER (Import/Export inferior)
       const ieVolver = document.getElementById('ieVolver');
       if (ieVolver) ieVolver.onclick = () => setModo('lista');
     });
@@ -249,13 +259,13 @@ if (window.__APP_LOADED__) {
     bindGuardarHandlers();
   }
 
-  // Rotación: solo si está armado (tras doble tap) y en gráficos
+  // Rotación: solo en gráficos y solo si está “armado” por doble‑tap
   window.addEventListener('orientationchange', () => {
     const modo = (document.getElementById("movimientos")?.dataset?.modo) || "lista";
     if ((modo === "graficos" || modo === "graficos2") && rotateReady) {
       try { captureFooterAnchors(); } catch {}
       mostrar();
-      rotateReady = false; // se desarma tras usar
+      rotateReady = false;
     }
   });
 
@@ -284,7 +294,7 @@ if (window.__APP_LOADED__) {
     </svg>`; }
 
   // ==========================
-  // LAYOUT FOOTER (anclajes)
+  // FOOTER ANCLAJES (gráficos)
   // ==========================
   let footerAnchors = { leftX:null, centerX:null, size:65 };
   function captureFooterAnchors(){
@@ -297,9 +307,8 @@ if (window.__APP_LOADED__) {
       footerAnchors.leftX   = leftRect.left - frRect.left;
       footerAnchors.centerX = centerRect.left - frRect.left;
       footerAnchors.size    = Math.round(centerRect.width || 65);
-    }catch(e){ console.warn('No se pudieron capturar anclajes:', e); }
+    }catch(e){ /* noop */ }
   }
-
   function ensureThreePlusButtons() {
     const fr = document.querySelector('.footer-row'); if (!fr) return [];
     const cs = getComputedStyle(fr); if (cs.position === 'static') fr.style.position = 'relative';
@@ -309,7 +318,13 @@ if (window.__APP_LOADED__) {
     }
     return Array.from(fr.querySelectorAll('.plus'));
   }
-  function layoutFooterReset(btnLeft, btnCenter, btnRight){ [btnLeft, btnCenter, btnRight].forEach(b=>{ if (!b) return; b.style.position = ""; b.style.left = ""; b.style.top = ""; b.style.transform = ""; b.style.opacity = "1"; }); }
+  function layoutFooterReset(btnLeft, btnCenter, btnRight){
+    [btnLeft, btnCenter, btnRight].forEach(b=>{
+      if (!b) return;
+      b.style.position = ""; b.style.left = ""; b.style.top = ""; b.style.transform = "";
+      b.style.opacity = "1"; b.style.display = ""; b.style.pointerEvents = "";
+    });
+  }
   function _normalizarTamaniosFooter(btnLeft, btnCenter, btnRight) {
     if (!btnLeft || !btnCenter || !btnRight) return;
     const r = btnLeft.getBoundingClientRect();
@@ -327,9 +342,10 @@ if (window.__APP_LOADED__) {
         const c = btnCenter.getBoundingClientRect();
         let rightRect;
         const visible = !!(btnRight && btnRight.style.display !== 'none' && btnRight.style.pointerEvents !== 'none' && btnRight.style.opacity !== '0');
-        if (visible) { rightRect = btnRight.getBoundingClientRect(); }
-        else {
-          const estLeft = (typeof footerAnchors.centerX === 'number') ? footerAnchors.centerX : (container.clientWidth / 2) - (c.width / 2);
+        if (visible) {
+          rightRect = btnRight.getBoundingClientRect();
+        } else {
+          const estLeft = (typeof footerAnchors.centerX === 'number') ? footerAnchors.centerX : ((container.clientWidth/2) - (c.width/2));
           rightRect = { left: fr.left + estLeft, width: c.width };
         }
         const centerLeft  = (l.left - fr.left) + (l.width / 2);
@@ -350,7 +366,7 @@ if (window.__APP_LOADED__) {
     btnLeft.style.left  = `${xLeft}px`;
     btnRight.style.left = `${xG2}px`;
     btnRight.style.display = ''; btnRight.style.opacity = '1'; btnRight.style.pointerEvents = 'auto';
-    // ❌ No reubicamos balance para mantenerlo EXACTAMENTE como en Movimientos
+    _recentrarCasa(container, btnLeft, btnCenter, btnRight); // NO tocamos balance
   }
   function layoutFooterGrafico2(container, btnLeft, btnCenter, btnRight){
     if (!container || !btnLeft || !btnCenter || !btnRight) return;
@@ -359,7 +375,7 @@ if (window.__APP_LOADED__) {
     [btnLeft, btnCenter, btnRight].forEach(b=>{ b.style.position='absolute'; b.style.top='50%'; b.style.transform='translateY(-50%)'; });
     btnLeft.style.left = `${xLeft}px`;
     btnRight.style.opacity='0'; btnRight.style.left='-9999px'; btnRight.style.pointerEvents='none';
-    // ❌ No reubicamos balance
+    _recentrarCasa(container, btnLeft, btnCenter, btnRight); // NO tocamos balance
   }
 
   // ==========================
@@ -367,29 +383,33 @@ if (window.__APP_LOADED__) {
   // ==========================
   function mostrar() {
     const movDiv = document.getElementById("movimientos"); if (!movDiv || movDiv.dataset.permiso !== "OK") return;
-    const filtros = document.querySelector('.filtros-wrapper'); const footerB = document.querySelector('.footer-controles');
+    const filtros = document.querySelector('.filtros-wrapper');
+    const footerB = document.querySelector('.footer-controles');
     const listaDiv = document.getElementById("lista");
     const impPage  = document.getElementById("importExport");
     const modo = movDiv.dataset.modo || "lista";
 
-    // Ocultar overlay Import/Export si no estamos en ese modo
+    // Ocultar overlay Import/Export si no es el modo
     if (impPage) impPage.classList.add('hidden');
 
-    // === Import/Export ===
+    // IMPORT / EXPORT (overlay)
     if (modo === "importexport") {
       if (filtros) filtros.style.display = 'none';
-      if (footerB) footerB.style.display  = '';   // el overlay cubre
+      if (footerB) footerB.style.display  = '';  // el overlay lo tapa; si prefieres ocultarlo, pon 'none'
       if (impPage) impPage.classList.remove('hidden');
       if (listaDiv) listaDiv.innerHTML = "";
       return;
     }
 
-    // Modos tradicionales
+    // Visibilidad UI (según fullscreenMode)
     if (filtros) filtros.style.display = fullscreenMode ? 'none' : '';
     if (footerB) footerB.style.display  = fullscreenMode ? 'none' : '';
 
+    // Filtros
     const fsIds = ["filtroMes","filtroAño","filtroCat","filtroSub","filtroOri"];
     const fs = fsIds.map(id => { const el = document.getElementById(id); return el ? el.value : "TODOS"; });
+
+    // Filtrado
     filtradosGlobal = (movimientos || [])
       .filter(m => {
         const d = (m.f || "").split("-");
@@ -402,8 +422,10 @@ if (window.__APP_LOADED__) {
       })
       .sort((a,b) => new Date(b.f) - new Date(a.f));
 
+    // Balance (texto y color — sin moverlo)
     let t = 0; for (let i=0;i<filtradosGlobal.length;i++){ const m = filtradosGlobal[i]; if (!hideCasa || !isCasaCategory(m.c)) t += Number(m.imp)||0; }
-    const factor = (fs[0] === "TODOS") ? 12 : 1; const balanceEl = document.getElementById("balance");
+    const balanceEl = document.getElementById("balance");
+    const factor = (fs[0] === "TODOS") ? 12 : 1;
     if (balanceEl){
       balanceEl.textContent = t.toFixed(2) + " €";
       if (t < 0) balanceEl.style.color = "var(--danger)";
@@ -412,20 +434,27 @@ if (window.__APP_LOADED__) {
       else balanceEl.style.color = "var(--electric-blue)";
     }
 
+    // Footer: botones
     const footerRow = document.querySelector('.footer-row');
     const plus = ensureThreePlusButtons();
-    const btnLeft = plus[0] || null;
+    const btnLeft   = plus[0] || null;
     const btnCenter = plus[1] || null;
-    const btnRight = plus[2] || null;
+    const btnRight  = plus[2] || null;
 
-    [btnLeft, btnCenter, btnRight].forEach(b=>{ if (!b) return; b.onclick = null; b.classList.remove("plus-like","btn-house-anim","active"); b.style.opacity = "1"; b.style.display = ""; });
-    layoutFooterReset(btnLeft, btnCenter, btnRight);
+    [btnLeft, btnCenter, btnRight].forEach(b=>{
+      if (!b) return;
+      b.onclick = null;
+      b.classList.remove("plus-like","btn-house-anim","active");
+      b.style.opacity = "1"; b.style.display = ""; b.style.pointerEvents="";
+      b.style.position=""; b.style.left=""; b.style.top=""; b.style.transform="";
+    });
 
+    // Modos
     if (modo === "graficos") {
       if (btnLeft){ btnLeft.innerHTML = iconBack(); btnLeft.onclick = () => setModo("lista"); }
       if (btnCenter){ btnCenter.innerHTML = iconCasa(); btnCenter.classList.add("btn-house-anim"); btnCenter.onclick = () => { hideCasa = !hideCasa; btnCenter.classList.toggle("active", !!hideCasa); mostrar(); }; }
       if (btnRight){ btnRight.style.display = ""; btnRight.style.opacity = "1"; btnRight.style.pointerEvents = "auto"; btnRight.innerHTML = iconGraph2(); btnRight.onclick = () => setModo("graficos2"); }
-      layoutFooterGrafico1(footerRow, btnLeft, btnCenter, btnRight);
+      layoutFooterGrafico1(footerRow, btnLeft, btnCenter, btnRight); // NO mover balance
 
       if (listaDiv) {
         listaDiv.innerHTML = "";
@@ -435,32 +464,30 @@ if (window.__APP_LOADED__) {
       if (btnLeft){ btnLeft.innerHTML = iconBack(); btnLeft.onclick = () => setModo("graficos"); }
       if (btnCenter){ btnCenter.innerHTML = iconCasa(); btnCenter.classList.add("btn-house-anim"); btnCenter.onclick = () => { hideCasa = !hideCasa; btnCenter.classList.toggle("active", !!hideCasa); mostrar(); }; }
       if (btnRight){ btnRight.innerHTML = ""; btnRight.onclick = null; btnRight.style.display = "none"; btnRight.style.pointerEvents = "none"; }
-      layoutFooterGrafico2(footerRow, btnLeft, btnCenter, btnRight);
+      layoutFooterGrafico2(footerRow, btnLeft, btnCenter, btnRight); // NO mover balance
 
       if (listaDiv) {
         listaDiv.innerHTML = "";
-        renderizarGraficos2();
+        renderizarGraficos2(); // asegurar que se pinta
       }
     } else {
       // LISTA
       if (btnLeft){ btnLeft.innerHTML = iconBars(); btnLeft.classList.add("plus-like"); btnLeft.onclick = () => setModo("graficos"); }
       if (btnCenter){ btnCenter.innerHTML = "+"; btnCenter.onclick = () => abrirFormulario(); }
       if (btnRight){
-        btnRight.innerHTML = ""; btnRight.onclick = null; btnRight.style.display = "none";
-        btnRight.style.position = ""; btnRight.style.left = ""; btnRight.style.top = "";
-        btnRight.style.transform = ""; btnRight.style.opacity = "0";
+        btnRight.innerHTML = ""; btnRight.onclick = null; btnRight.style.display = "none"; btnRight.style.pointerEvents = "none";
       }
 
       if (listaDiv) {
         const rows = filtradosGlobal
           .slice(0, registrosVisibles)
           .map(m => `
-          <div class='card' onclick="abrirFormulario('${m.id}')" style="border-left-color:${m.imp >= 0 ? 'var(--success)' : 'var(--danger)'}">
-            <div class="meta">${esc(m.f.split("-").reverse().join("/"))} • ${esc(m.o)}</div>
-            <b>${esc(m.c)} - ${esc(m.s)}</b>
-            ${m.d ? `<div style="font-size:12px;opacity:.8">${esc(m.d)}</div>` : ''}
-            <div class="monto" style="color:${m.imp >= 0 ? 'var(--success)' : 'var(--danger)'}">${(Number(m.imp)||0).toFixed(2)} €</div>
-          </div>`).join("");
+            <div class='card' onclick="abrirFormulario('${m.id}')" style="border-left-color:${m.imp >= 0 ? 'var(--success)' : 'var(--danger)'}">
+              <div class="meta">${esc(m.f.split("-").reverse().join("/"))} • ${esc(m.o)}</div>
+              <b>${esc(m.c)} - ${esc(m.s)}</b>
+              ${m.d ? `<div style="font-size:12px;opacity:.8">${esc(m.d)}</div>` : ''}
+              <div class="monto" style="color:${m.imp >= 0 ? 'var(--success)' : 'var(--danger)'}">${(Number(m.imp)||0).toFixed(2)} €</div>
+            </div>`).join("");
         listaDiv.innerHTML = rows;
         const loader = document.getElementById("loader"); if (loader) loader.style.display = "none";
       }
@@ -469,7 +496,7 @@ if (window.__APP_LOADED__) {
     ensureBackupIndicator(); updateBackupIndicator();
   }
 
-  // Reajustes al cambiar tamaño (solo necesarios en gráficos para anclajes)
+  // Reajustes al cambiar tamaño: solo recalcular anclajes en gráficos
   window.addEventListener('resize', debounce(function(){
     const movDiv = document.getElementById("movimientos");
     if (!movDiv) return; const modo = movDiv.dataset.modo || "lista";
@@ -492,12 +519,14 @@ if (window.__APP_LOADED__) {
     const filtroCat = (elFC && elFC.value) || "TODAS";
     let fuente = filtradosGlobal.slice();
     if (hideCasa) fuente = fuente.filter(m => !isCasaCategory(m.c));
+
     const totales = {};
     if (filtroCat === "TODAS") {
       for (let m of fuente) if (m.imp < 0) totales[m.c] = (totales[m.c]||0) + Math.abs(m.imp);
     } else {
       for (let m of fuente) if (m.imp < 0 && m.c === filtroCat) totales[m.s] = (totales[m.s]||0) + Math.abs(m.imp);
     }
+
     const vals = Object.values(totales);
     const max = Math.max(...vals, 1);
     const titulo = (filtroCat === "TODAS") ? "ANÁLISIS DE GASTO POR CATEGORÍAS" : `SUBCATEGORÍAS DE ${filtroCat}`;
@@ -523,17 +552,14 @@ if (window.__APP_LOADED__) {
       return `
       <div class="card" style="border:none;background:transparent;cursor:pointer" data-label="${esc(label)}"
            onclick="handleGraficoBarClick(this.dataset.label)">
-        <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:5px">
-          <span>${esc(label)}</span><b>${val.toFixed(2)} €</b>
-        </div>
+        <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:5px"><span>${esc(label)}</span><b>${val.toFixed(2)} €</b></div>
         <div class="bar-flex">
           <div class="bar-segment" style="width:${(t1/val)*100}%;background:var(--electric-blue)"></div>
           <div class="bar-segment" style="width:${(t2/val)*100}%;background:var(--success)"></div>
           <div class="bar-segment" style="width:${(t3/val)*100}%;background:var(--warning)"></div>
           <div class="bar-segment" style="width:${(t4/val)*100}%;background:var(--danger)"></div>
         </div>
-      </div>
-      `;
+      </div>`;
     }).join("");
   }
   function handleGraficoBarClick(label){
@@ -570,17 +596,108 @@ if (window.__APP_LOADED__) {
             }
           </div>
           <button class="btn-silver" id="cerrarDetalle">CERRAR</button>
-        </div>
-      `;
+        </div>`;
       document.body.appendChild(overlay);
       overlay.querySelector('#cerrarDetalle').onclick = ()=> overlay.remove();
-    } catch (e) {
-      console.error(e); alert("No se pudo abrir el detalle.");
+    } catch (e) { alert("No se pudo abrir el detalle."); }
+  }
+
+  // ==========================
+  // GRÁFICOS 2 (columnas)
+  // ==========================
+  function renderizarGraficos2() {
+    const lista = document.getElementById("lista");
+    const oldChart = lista.querySelector('.g2-wrap'); if (oldChart) oldChart.remove();
+
+    const fsIds = ["filtroMes","filtroAño","filtroCat","filtroSub","filtroOri"];
+    const fs = fsIds.map(id => { const el = document.getElementById(id); return el ? el.value : "TODOS"; });
+
+    const hoy = new Date();
+    const meses = [];
+    for (let i=12; i>=0; i--){
+      const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+      meses.push({ d, key });
+    }
+
+    const filtraOtros = (m) => {
+      const cC = fs[2] === "TODAS" || m.c === fs[2];
+      const cS = fs[3] === "TODAS" || m.s === fs[3];
+      const cO = fs[4] === "TODOS" || m.o === fs[4];
+      return cC && cS && cO;
+    };
+    const base = (hideCasa ? movimientos.filter(mm => !isCasaCategory(mm.c)) : movimientos).filter(filtraOtros);
+    const sumaMes = new Map();
+    for (let mov of base) {
+      const k = (mov.f || "").slice(0,7);
+      sumaMes.set(k, (sumaMes.get(k) || 0) + (Number(mov.imp) || 0));
+    }
+
+    const valores = meses.map(m => sumaMes.get(m.key) || 0);
+    const maxAbs = Math.max(...valores.map(v => Math.abs(v)), 1);
+    const minBar = 4;
+    const colorPorMes = (t) => {
+      if (t < 0) return "var(--danger)";
+      if (t <= 250) return "var(--warning)";
+      if (t <= 750) return "var(--success)";
+      return "var(--electric-blue)";
+    };
+    const mesesCorta = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+    const fmtEuro = (n) => { const v = Number(n)||0, s = v>=0?"+":"−", a = Math.abs(v).toFixed(2).replace(".",","); return `${s}${a} €`; };
+
+    let html = `
+      <div class="g2-wrap">
+        <div class="g2-chart" style="position:relative;height:180px;display:grid;grid-template-columns:repeat(13,1fr);gap:10px;align-items:center;margin-bottom:26px;">
+          <div class="g2-baseline" style="position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(212,175,55,.35)"></div>
+    `;
+    for (const m of meses){
+      const v = sumaMes.get(m.key) || 0;
+      const h = Math.max(minBar, (Math.abs(v)/maxAbs) * 80);
+      const pos = v >= 0;
+      const color = colorPorMes(v);
+      const mesIdx = new Date(m.key + "-01T00:00:00").getMonth();
+      const label = mesesCorta[mesIdx];
+      const tipText = `${label} ${m.d.getFullYear()}: ${fmtEuro(v)}`;
+      html += `
+      <div class="g2-col" data-key="${m.key}" style="position:relative;height:100%;">
+        <div class="g2-bar ${pos ? 'pos' : 'neg'}" data-h="${h}" style="height:0px;background:${color};"></div>
+        <div class="g2-tip ${pos ? 'tip-pos' : 'tip-neg'}">${tipText}</div>
+        <div class="g2-label" style="position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--primary)">${label}</div>
+      </div>`;
+    }
+    html += `</div></div>`;
+    lista.insertAdjacentHTML('beforeend', html);
+
+    requestAnimationFrame(function(){
+      const bars = lista.querySelectorAll('.g2-chart .g2-bar');
+      for (let i=0;i<bars.length;i++){
+        const el = bars[i];
+        const target = parseFloat(el.getAttribute('data-h')) || 0;
+        el.style.height = target + 'px';
+      }
+    });
+
+    const chart = lista.querySelector('.g2-chart');
+    if (!chart) return;
+    if (!chart.getAttribute('data-tipBound')){
+      chart.addEventListener('click', function(ev){
+        const col = ev.target.closest('.g2-col'); if (!col) return;
+        const open = chart.querySelectorAll('.g2-col.show-tip');
+        for (let i=0;i<open.length;i++) if (open[i]!==col) open[i].classList.remove('show-tip');
+        col.classList.toggle('show-tip');
+      });
+      document.addEventListener('click', function(ev){
+        if (!chart.contains(ev.target)){
+          const open = chart.querySelectorAll('.g2-col.show-tip');
+          for (let i=0;i<open.length;i++) open[i].classList.remove('show-tip');
+        }
+      });
+      chart.setAttribute('data-tipBound','1');
     }
   }
 
   // ==========================
-  // FORMULARIO / CRUD (sin cambios de fondo)
+  // FORMULARIO / CRUD
   // ==========================
   function onOrigenChange(origenValor, { preCat = "", preSub = "", esEdicion = false } = {}) {
     const selCat = document.getElementById("categoria");
@@ -614,8 +731,7 @@ if (window.__APP_LOADED__) {
         <button class="btn-nomina btn-oskar" id="btn_nom_oskar">OSKAR</button>
         <button class="btn-nomina btn-josune" id="btn_nom_josune">JOSUNE</button>
         <button class="btn-nomina btn-cancel" id="btn_nom_cancel">CANCELAR</button>
-      </div>
-    `;
+      </div>`;
     document.body.appendChild(overlay);
 
     const close = () => overlay.remove();
@@ -720,7 +836,7 @@ if (window.__APP_LOADED__) {
   };
 
   // ==========================
-  // GUARDAR
+  // GUARDAR (robusto EU) + CRUD
   // ==========================
   const guardar = () => {
     const get = (id) => (document.getElementById(id)?.value ?? "").trim();
@@ -742,7 +858,7 @@ if (window.__APP_LOADED__) {
       importeRaw:   get("importe")
     };
 
-    // fallback selects
+    // fallback selects por si innerHTML dejó solo texto visible
     const selCat = document.getElementById("categoria");
     const selSub = document.getElementById("subcategoria");
     if (selCat && !v.categoria && selCat.selectedIndex >= 0) {
@@ -800,6 +916,7 @@ if (window.__APP_LOADED__) {
     actualizarListas(); resetPagina(); mostrar();
   };
 
+  // Aux
   const manejarNuevo = (el, tipo) => {
     if (el.value !== "+") return;
     let n = el.dataset.nuevoValor || "";
@@ -885,7 +1002,6 @@ if (window.__APP_LOADED__) {
     }
   };
 
-  // Normalización retroactiva (igual a tu versión)
   function normalizarListasExistentes(){
     const vistosCat = new Set(Object.values(catBase).map(v => canonicalizeLabel(v)));
     const nuevaExtra = [];
@@ -928,7 +1044,7 @@ if (window.__APP_LOADED__) {
   }
 
   // ==========================
-  // INIT + SCROLL
+  // INIT + SCROLL INFINITO
   // ==========================
   const init = () => {
     const fM = document.getElementById("filtroMes"),
@@ -962,7 +1078,9 @@ if (window.__APP_LOADED__) {
     }
   }, { passive: true });
 
-  // ===== CSV / BACKUPS / SW / DROPBOX (mismo que antes) =====
+  // ==========================
+  // CSV / BACKUPS / SW / DROPBOX / AUTOSYNC — Igual a estable
+  // ==========================
   const exportarCSV = () => {
     if (!movimientos || movimientos.length === 0) { alert("No hay datos para exportar."); return; }
     const SEP = ";";
@@ -1097,11 +1215,7 @@ if (window.__APP_LOADED__) {
       } finally { e.target.value = ""; }
     };
 
-    reader.onerror = () => alert("No se pudo leer el archivo.");
-    reader.readAsText(file, 'UTF-8');
-  };
-
-  // ===== Backups / SW / Dropbox / AutoSync (igual que antes) =====
+  // === BACKUPS (rotativo local + indicador) ===
   async function createAndStoreLocalBackup(){
     const enc = await encryptBackup(buildBackupObject());
     const idx = ((parseInt(localStorage.getItem('backup_idx')||'0',10)) % 5) + 1;
@@ -1157,6 +1271,7 @@ if (window.__APP_LOADED__) {
   }
   setInterval(updateBackupIndicator, 60000);
 
+  // === SERVICE WORKER (PWA) ===
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function(){
       navigator.serviceWorker.register('./sw.js').catch(function(err){
@@ -1165,6 +1280,7 @@ if (window.__APP_LOADED__) {
     });
   }
 
+  // === DROPBOX (PKCE) + AUTOSYNC ===
   const DBX_APP_KEY      = 'pow1k3kk53abk75';
   const DBX_REDIRECT_URI = 'https://oskarlm.github.io/APK_V0.0/auth/dropbox/callback';
   const DBX_FILE_PATH    = '/mis_gastos_backup.json';
@@ -1298,7 +1414,7 @@ if (window.__APP_LOADED__) {
 
   function dropboxSignOut(){ dbx_clearTokens(); alert('Dropbox desconectado en este dispositivo.'); }
 
-  // AUTO‑SYNC
+  // Auto‑sync
   let _syncTimer = null;
   async function autoSyncToDropbox(reason = 'changed') {
     try {
@@ -1319,19 +1435,15 @@ if (window.__APP_LOADED__) {
         body: new TextEncoder().encode(payload)
       });
 
-      if (!res.ok) {
-        const errTxt = await res.text();
-        console.warn('Sync Dropbox error:', errTxt);
-        return;
-      }
-
+      if (!res.ok) { /* log */ return; }
       localStorage.setItem('backup_last_ts', String(Date.now()));
       updateBackupIndicator?.();
-    } catch (e) {
-      console.warn('AutoSync Dropbox falló:', e);
-    }
+    } catch (e) { /* log */ }
   }
-  function scheduleSync(reason = 'changed') { try { clearTimeout(_syncTimer); } catch {} _syncTimer = setTimeout(() => autoSyncToDropbox(reason), 1200); }
+  function scheduleSync(reason = 'changed') {
+    try { clearTimeout(_syncTimer); } catch {}
+    _syncTimer = setTimeout(() => autoSyncToDropbox(reason), 1200);
+  }
   async function loadFromDropboxOnStart({ silent = true } = {}) {
     try {
       if (!navigator.onLine) return;
@@ -1346,8 +1458,7 @@ if (window.__APP_LOADED__) {
         }
       });
 
-      if (!res.ok) { const txt = await res.text(); console.info('No se pudo descargar (quizá aún no hay copia en Dropbox):', txt); return; }
-
+      if (!res.ok) { return; }
       const text = await res.text();
       let payload; try { payload = JSON.parse(text); } catch { return; }
 
@@ -1367,18 +1478,19 @@ if (window.__APP_LOADED__) {
       actualizarListas?.(); resetPagina?.(); mostrar?.();
       if (!silent) alert('Datos cargados desde Dropbox.');
 
-    } catch (e) {
-      console.warn('Carga automática desde Dropbox falló:', e);
-    }
+    } catch (e) { /* log */ }
   }
   window.addEventListener('online', () => scheduleSync('online'));
 
   // ==========================
   // EXPORTAR A GLOBAL (para HTML)
   // ==========================
-  function resetTotal(){ /* noop por ahora */ }
+  function resetTotal(){ /* noop (actívalo si quieres borrar todo con confirmación) */ }
   window.pressPin = pressPin; window.clearPin = clearPin; window.biometricAuth = biometricAuth;
-  window.resetPagina = resetPagina; window.mostrar = mostrar; window.abrirFormulario = abrirFormulario; window.volver = volver; window.eliminarRegistroActual = eliminarRegistroActual; window.exportarCSV = exportarCSV; window.importarCSV = importarCSV; window.manejarNuevo = manejarNuevo; window.borrarElemento = borrarElemento; window.abrirGraficos = abrirGraficos; window.ejecutarBackupRotativo = ejecutarBackupRotativo; window.init = init; window.actualizarListas = actualizarListas;
+  window.resetPagina = resetPagina; window.mostrar = mostrar; window.abrirFormulario = abrirFormulario; window.volver = volver;
+  window.eliminarRegistroActual = eliminarRegistroActual; window.exportarCSV = exportarCSV; window.importarCSV = importarCSV;
+  window.manejarNuevo = manejarNuevo; window.borrarElemento = borrarElemento; window.abrirGraficos = abrirGraficos;
+  window.ejecutarBackupRotativo = ejecutarBackupRotativo; window.init = init; window.actualizarListas = actualizarListas;
 
   function setModo(modo){
     const m = document.getElementById("movimientos");
@@ -1387,10 +1499,18 @@ if (window.__APP_LOADED__) {
     mostrar();
   }
   window.setModo = setModo;
+
+  // Casa toggle expuesto
   window.toggleCasa = () => { hideCasa = !hideCasa; mostrar(); };
 
+  // Drilldown gráficos
   window.handleGraficoBarClick = handleGraficoBarClick; window.abrirDetalleMovs = abrirDetalleMovs;
-  window.dropboxStartLogin = dropboxStartLogin; window.dropboxUploadEncryptedBackup = dropboxUploadEncryptedBackup; window.dropboxDownloadAndRestore = dropboxDownloadAndRestore; window.dropboxSignOut = dropboxSignOut;
+
+  // Dropbox
+  window.dropboxStartLogin = dropboxStartLogin; window.dropboxUploadEncryptedBackup = dropboxUploadEncryptedBackup;
+  window.dropboxDownloadAndRestore = dropboxDownloadAndRestore; window.dropboxSignOut = dropboxSignOut;
+
+  // Backup
   window.createAndStoreLocalBackup = createAndStoreLocalBackup;
 
   // imprescindible para onclick="guardar()"
