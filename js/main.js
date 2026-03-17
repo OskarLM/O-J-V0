@@ -1,4 +1,4 @@
-// === main.js (limpio + import/export + popup Nómina solo en creación + fix Guardar + export global) ===
+// === main.js (Import/Export con botón VOLVER en la propia pantalla + rotación + popup Nómina solo en creación + fix Guardar + export global) ===
 if (window.__APP_LOADED__) {
   // Ya cargado: no re-evaluar
 } else {
@@ -226,9 +226,13 @@ if (window.__APP_LOADED__) {
       // Enlazar Guardar
       bindGuardarHandlers();
 
-      // Balance abre IMPORT/EXPORT
+      // Balance → Import/Export
       const bal = document.getElementById('balance');
       if (bal) bal.onclick = () => setModo('importexport');
+
+      // Botón VOLVER de Import/Export (en la propia pantalla)
+      const ieVolver = document.getElementById('ieVolver');
+      if (ieVolver) ieVolver.onclick = () => setModo('lista');
     });
   } else {
     bindGuardarHandlers();
@@ -354,45 +358,15 @@ if (window.__APP_LOADED__) {
     const impPage  = document.getElementById("importExport");
     const modo = movDiv.dataset.modo || "lista";
 
-    // Limpieza básica
+    // Ocultar siempre el overlay import/export si no estamos en ese modo
     if (impPage) impPage.classList.add('hidden');
 
     // === NUEVO MODO IMPORT/EXPORT ===
     if (modo === "importexport") {
       if (filtros) filtros.style.display = 'none';
-      if (footerB) footerB.style.display  = '';
-
+      if (footerB) footerB.style.display  = '';  // puede dejarse visible; el overlay está por encima
       if (impPage) impPage.classList.remove('hidden');
-
-      const footerRow = document.querySelector('.footer-row');
-      const plus = ensureThreePlusButtons();
-      const btnLeft = plus[0] || null;
-      const btnCenter = plus[1] || null;
-      const btnRight = plus[2] || null;
-
-      [btnLeft, btnCenter, btnRight].forEach(b=>{
-        if (!b) return;
-        b.onclick = null;
-        b.classList.remove("plus-like","btn-house-anim","active");
-        b.style.opacity = "1";
-        b.style.display = "";
-      });
-      layoutFooterReset(btnLeft, btnCenter, btnRight);
-
-      // ⬅️ Botón VOLVER (flecha) en el botón izquierdo del footer
-      if (btnLeft){
-        btnLeft.innerHTML = iconBack();
-        btnLeft.onclick = () => setModo("lista");
-      }
-
-      // Centro = botón "+"
-      if (btnCenter){
-        btnCenter.innerHTML = "+";
-        btnCenter.onclick = () => abrirFormulario();
-      }
-
-      // No hay lista que renderizar
-      if (listaDiv) listaDiv.innerHTML = "";
+      if (listaDiv) listaDiv.innerHTML = "";     // no hay lista en esta vista
       return;
     }
 
@@ -484,6 +458,7 @@ if (window.__APP_LOADED__) {
     ensureBackupIndicator(); updateBackupIndicator();
   }
 
+  // Reajustes al cambiar tamaño y orientación (rotación)
   window.addEventListener('resize', debounce(function(){
     const movDiv = document.getElementById("movimientos");
     if (!movDiv) return; const modo = movDiv.dataset.modo || "lista";
@@ -498,6 +473,10 @@ if (window.__APP_LOADED__) {
     else layoutFooterGrafico2(footerRow, btnLeft, btnCenter, btnRight);
     layoutBalanceFixed(footerRow, balanceEl);
   }, 150));
+  window.addEventListener('orientationchange', () => {
+    try { captureFooterAnchors(); } catch {}
+    mostrar();
+  });
 
   // ==========================
   // GRÁFICOS 1 (barras) + DRILL
