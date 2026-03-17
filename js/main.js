@@ -325,57 +325,91 @@ if (window.__APP_LOADED__) {
       b.style.opacity = "1"; b.style.display = ""; b.style.pointerEvents = "";
     });
   }
-  function _normalizarTamaniosFooter(btnLeft, btnCenter, btnRight) {
-    if (!btnLeft || !btnCenter || !btnRight) return;
-    const r = btnLeft.getBoundingClientRect();
-    const size = Math.round(Math.max(r.width, r.height));
-    [btnCenter, btnRight].forEach(b => { if (!b) return; b.style.width = size + 'px'; b.style.height = size + 'px'; b.style.borderRadius = '50%'; });
-    return size;
-  }
+
+  // === NUEVO: recentrado geométrico puro, sin tocar tamaños ===
   function _recentrarCasa(container, btnLeft, btnCenter, btnRight) {
     if (!container || !btnLeft || !btnCenter) return;
+
     requestAnimationFrame(() => {
-      _normalizarTamaniosFooter(btnLeft, btnCenter, btnRight);
-      requestAnimationFrame(() => {
-        const fr = container.getBoundingClientRect();
-        const l = btnLeft.getBoundingClientRect();
-        const c = btnCenter.getBoundingClientRect();
-        let rightRect;
-        const visible = !!(btnRight && btnRight.style.display !== 'none' && btnRight.style.pointerEvents !== 'none' && btnRight.style.opacity !== '0');
-        if (visible) {
-          rightRect = btnRight.getBoundingClientRect();
-        } else {
-          const estLeft = (typeof footerAnchors.centerX === 'number') ? footerAnchors.centerX : ((container.clientWidth/2) - (c.width/2));
-          rightRect = { left: fr.left + estLeft, width: c.width };
-        }
-        const centerLeft  = (l.left - fr.left) + (l.width / 2);
-        const centerRight = (rightRect.left - fr.left) + (rightRect.width / 2);
-        const centerCasa  = (centerLeft + centerRight) / 2;
-        const casaLeft    = Math.round(centerCasa - (c.width / 2));
-        btnCenter.style.left = `${casaLeft}px`;
-      });
+      const fr = container.getBoundingClientRect();
+      const l  = btnLeft.getBoundingClientRect();
+      const c  = btnCenter.getBoundingClientRect();
+
+      // Detectar si el derecho está visible
+      let rightMidX;
+      const rightVisible = !!(btnRight
+        && btnRight.style.display !== 'none'
+        && btnRight.style.pointerEvents !== 'none'
+        && btnRight.style.opacity !== '0');
+
+      if (rightVisible) {
+        const r = btnRight.getBoundingClientRect();
+        rightMidX = r.left + r.width / 2;
+      } else {
+        // Usar ancla (centerX) o centro del footer como “hueco” del derecho
+        const anchorX = (typeof footerAnchors.centerX === 'number')
+          ? (fr.left + footerAnchors.centerX + (btnCenter.offsetWidth || 0) / 2)
+          : (fr.left + (container.clientWidth / 2));
+        rightMidX = anchorX;
+      }
+
+      const leftMidX  = l.left + l.width / 2;
+      const targetMid = (leftMidX + rightMidX) / 2;
+
+      const casaLeft = Math.round((targetMid - fr.left) - (c.width / 2));
+      btnCenter.style.position  = 'absolute';
+      btnCenter.style.top       = '50%';
+      btnCenter.style.transform = 'translateY(-50%)';
+      btnCenter.style.left      = `${casaLeft}px`;
     });
   }
+
+  // === LAYOUT GRÁFICOS: no normalizamos tamaños; solo posicionamos + recentramos CASA ===
   function layoutFooterGrafico1(container, btnLeft, btnCenter, btnRight){
     if (!container || !btnLeft || !btnCenter || !btnRight) return;
     const cs = getComputedStyle(container); if (cs.position === 'static') container.style.position = 'relative';
-    const SIZE  = footerAnchors.size || 65;
-    const xLeft = (footerAnchors.leftX != null) ? footerAnchors.leftX : 20;
-    const xG2   = (footerAnchors.centerX != null) ? footerAnchors.centerX : ((container.clientWidth/2) - (SIZE/2));
-    [btnLeft, btnCenter, btnRight].forEach(b=>{ b.style.position='absolute'; b.style.top='50%'; b.style.transform='translateY(-50%)'; });
+
+    const SIZE  = footerAnchors.size || 65; // estimador solo si hiciera falta
+    const xLeft = (footerAnchors.leftX != null)   ? footerAnchors.leftX   : 20;
+    const xG2   = (footerAnchors.centerX != null) ? footerAnchors.centerX : ((container.clientWidth / 2) - (SIZE / 2));
+
+    [btnLeft, btnCenter, btnRight].forEach(b=>{
+      if (!b) return;
+      b.style.position  = 'absolute';
+      b.style.top       = '50%';
+      b.style.transform = 'translateY(-50%)';
+    });
+
     btnLeft.style.left  = `${xLeft}px`;
     btnRight.style.left = `${xG2}px`;
-    btnRight.style.display = ''; btnRight.style.opacity = '1'; btnRight.style.pointerEvents = 'auto';
-    _recentrarCasa(container, btnLeft, btnCenter, btnRight); // NO tocamos balance
+    btnRight.style.display = '';
+    btnRight.style.opacity = '1';
+    btnRight.style.pointerEvents = 'auto';
+
+    _recentrarCasa(container, btnLeft, btnCenter, btnRight);
   }
+
   function layoutFooterGrafico2(container, btnLeft, btnCenter, btnRight){
     if (!container || !btnLeft || !btnCenter || !btnRight) return;
     const cs = getComputedStyle(container); if (cs.position === 'static') container.style.position = 'relative';
+
     const xLeft = (footerAnchors.leftX != null) ? footerAnchors.leftX : 20;
-    [btnLeft, btnCenter, btnRight].forEach(b=>{ b.style.position='absolute'; b.style.top='50%'; b.style.transform='translateY(-50%)'; });
+
+    [btnLeft, btnCenter, btnRight].forEach(b=>{
+      if (!b) return;
+      b.style.position  = 'absolute';
+      b.style.top       = '50%';
+      b.style.transform = 'translateY(-50%)';
+    });
+
     btnLeft.style.left = `${xLeft}px`;
-    btnRight.style.opacity='0'; btnRight.style.left='-9999px'; btnRight.style.pointerEvents='none';
-    _recentrarCasa(container, btnLeft, btnCenter, btnRight); // NO tocamos balance
+    // El derecho se “oculta” lógicamente; usamos el ancla para centrar CASA
+    btnRight.style.opacity='0';
+    btnRight.style.left='-9999px';
+    btnRight.style.pointerEvents='none';
+    btnRight.style.display=''; // no 'none' para poder medir si hiciera falta
+
+    _recentrarCasa(container, btnLeft, btnCenter, btnRight);
   }
 
   // ==========================
@@ -395,7 +429,7 @@ if (window.__APP_LOADED__) {
     // IMPORT / EXPORT (overlay)
     if (modo === "importexport") {
       if (filtros) filtros.style.display = 'none';
-      if (footerB) footerB.style.display  = '';  // el overlay lo tapa; si prefieres ocultarlo, pon 'none'
+      if (footerB) footerB.style.display  = '';  // el overlay lo tapa
       if (impPage) impPage.classList.remove('hidden');
       if (listaDiv) listaDiv.innerHTML = "";
       return;
@@ -449,12 +483,18 @@ if (window.__APP_LOADED__) {
       b.style.position=""; b.style.left=""; b.style.top=""; b.style.transform="";
     });
 
+    // === Capturar anclajes al entrar en gráficos (importante para centrar bien CASA)
+    if (modo === "graficos" || modo === "graficos2") {
+      try { captureFooterAnchors(); } catch {}
+    }
+
     // Modos
     if (modo === "graficos") {
       if (btnLeft){ btnLeft.innerHTML = iconBack(); btnLeft.onclick = () => setModo("lista"); }
       if (btnCenter){ btnCenter.innerHTML = iconCasa(); btnCenter.classList.add("btn-house-anim"); btnCenter.onclick = () => { hideCasa = !hideCasa; btnCenter.classList.toggle("active", !!hideCasa); mostrar(); }; }
       if (btnRight){ btnRight.style.display = ""; btnRight.style.opacity = "1"; btnRight.style.pointerEvents = "auto"; btnRight.innerHTML = iconGraph2(); btnRight.onclick = () => setModo("graficos2"); }
-      layoutFooterGrafico1(footerRow, btnLeft, btnCenter, btnRight); // NO mover balance
+
+      layoutFooterGrafico1(footerRow, btnLeft, btnCenter, btnRight);  // NO mover balance
 
       if (listaDiv) {
         listaDiv.innerHTML = "";
@@ -464,7 +504,8 @@ if (window.__APP_LOADED__) {
       if (btnLeft){ btnLeft.innerHTML = iconBack(); btnLeft.onclick = () => setModo("graficos"); }
       if (btnCenter){ btnCenter.innerHTML = iconCasa(); btnCenter.classList.add("btn-house-anim"); btnCenter.onclick = () => { hideCasa = !hideCasa; btnCenter.classList.toggle("active", !!hideCasa); mostrar(); }; }
       if (btnRight){ btnRight.innerHTML = ""; btnRight.onclick = null; btnRight.style.display = "none"; btnRight.style.pointerEvents = "none"; }
-      layoutFooterGrafico2(footerRow, btnLeft, btnCenter, btnRight); // NO mover balance
+
+      layoutFooterGrafico2(footerRow, btnLeft, btnCenter, btnRight);  // NO mover balance
 
       if (listaDiv) {
         listaDiv.innerHTML = "";
@@ -496,7 +537,7 @@ if (window.__APP_LOADED__) {
     ensureBackupIndicator(); updateBackupIndicator();
   }
 
-  // Reajustes al cambiar tamaño: solo recalcular anclajes en gráficos
+  // Reajustes al cambiar tamaño: solo recalcular/centrar en gráficos
   window.addEventListener('resize', debounce(function(){
     const movDiv = document.getElementById("movimientos");
     if (!movDiv) return; const modo = movDiv.dataset.modo || "lista";
@@ -1116,7 +1157,6 @@ if (window.__APP_LOADED__) {
         const header = lines[0];
         const counts = { tab:(header.match(/\t/g)||[]).length, semi:(header.match(/;/g)||[]).length, comma:(header.match(/,/g)||[]).length };
         let delim = "\t"; if (counts.semi>=counts.tab && counts.semi>=counts.comma) delim=";"; else if (counts.comma>=counts.tab) delim=",";
-
         const parseLine = (line) => {
           const out=[]; let cur="", inQ=false;
           for(let i=0;i<line.length;i++){
