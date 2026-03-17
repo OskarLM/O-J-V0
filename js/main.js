@@ -1,4 +1,4 @@
-// === main.js — Recupera layout original de CASA y BALANCE en Gráficos + mantiene Import/Export overlay, doble‑tap (UI) y rotación armada ===
+// === main.js — Sin botón fantasma: CASA centrada y balance correcto; G1↔G2 por doble‑tap en CASA ===
 if (window.__APP_LOADED__) {
   // Evitar doble carga
 } else {
@@ -33,7 +33,7 @@ if (window.__APP_LOADED__) {
   let rotateReady = false;
   let rotateReadyTimer = null;
 
-  // Escape seguro para HTML (corregido)
+  // Escape seguro para HTML (corrigido)
   function esc(s){
     return (s ?? '')
       .toString()
@@ -246,14 +246,6 @@ if (window.__APP_LOADED__) {
       try { const prev = sessionStorage.getItem('ui_fullscreen'); if (prev === '1') { fullscreenMode = true; toggleFullscreenUI(); } } catch {}
 
       bindGuardarHandlers();
-
-      // Balance → Import/Export
-      const bal = document.getElementById('balance');
-      if (bal) bal.onclick = () => setModo('importexport');
-
-      // Botón VOLVER de Import/Export (inferior)
-      const ieVolver = document.getElementById('ieVolver');
-      if (ieVolver) ieVolver.onclick = () => setModo('lista');
     });
   } else {
     bindGuardarHandlers();
@@ -282,11 +274,6 @@ if (window.__APP_LOADED__) {
     <svg viewBox="0 0 24 24" class="btn-icon" fill="none" stroke="black" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
       <path d="M15 19l-7-7 7-7"></path>
     </svg>`; }
-  function iconGraph2(){ return `
-    <svg viewBox="0 0 24 24" class="btn-icon" fill="none" stroke-width="2.6">
-      <rect x="6" y="7" width="4" height="10" fill="#ef4444" stroke="#ef4444" rx="1"></rect>
-      <rect x="14" y="5" width="4" height="12" fill="#22c55e" stroke="#22c55e" rx="1"></rect>
-    </svg>`; }
   function iconCasa(){ return `
     <svg viewBox="0 0 24 24">
       <path d="M3 10.5 L12 3 L21 10.5" />
@@ -299,9 +286,9 @@ if (window.__APP_LOADED__) {
   function setModo(modo){
     const m = document.getElementById("movimientos");
     const from = m.dataset.modo || 'lista';
-    // Capturamos anclajes cuando entramos en gráficos desde lista (como hacías)
+    // Al entrar en gráficos desde lista, captura anclajes
     if ((modo === 'graficos' || modo === 'graficos2') && from === 'lista') { captureFooterAnchors(); }
-    m.dataset.modo = modo; // "lista" | "graficos" | "graficos2" | "importexport"
+    m.dataset.modo = modo; // "lista" | "graficos" | "graficos2"
     resetPagina(); mostrar();
   }
   function toggleCasa(){
@@ -328,86 +315,78 @@ if (window.__APP_LOADED__) {
       footerAnchors.leftX   = leftRect.left - frRect.left;
       footerAnchors.centerX = centerRect.left - frRect.left;
       footerAnchors.size    = Math.round(centerRect.width || 65);
-    }catch(e){ console.warn('No se pudieron capturar anclajes:', e); }
+    }catch(e){ /* noop */ }
   }
 
   // ==========================
-  // LAYOUT FOOTER (=== ORIGINAL ===)
+  // LAYOUT FOOTER — sin botón derecho
   // ==========================
-  function ensureThreePlusButtons() {
-    const fr = document.querySelector('.footer-row'); if (!fr) return [];
-    const cs = getComputedStyle(fr); if (cs.position === 'static') fr.style.position = 'relative';
-    let plus = fr.querySelectorAll('.plus');
-    for (let i = plus.length; i < 3; i++) {
-      const b = document.createElement('button'); b.className = 'plus'; b.setAttribute('aria-hidden', 'true'); b.style.cssText = 'opacity:0;pointer-events:none;position:absolute;left:-9999px;'; fr.appendChild(b);
-    }
-    return Array.from(fr.querySelectorAll('.plus'));
+  function ensureTwoPlusButtons() {
+    const fr = document.querySelector('.footer-row'); 
+    if (!fr) return [];
+    const cs = getComputedStyle(fr); 
+    if (cs.position === 'static') fr.style.position = 'relative';
+    // NO creamos placeholders; devolvemos solo los existentes (izq y centro)
+    return Array.from(fr.querySelectorAll('.plus')).slice(0,2);
   }
-  function layoutFooterReset(btnLeft, btnCenter, btnRight){
-    [btnLeft, btnCenter, btnRight].forEach(b=>{
+  function layoutFooterReset(btnLeft, btnCenter){
+    [btnLeft, btnCenter].forEach(b=>{
       if (!b) return;
       b.style.position = ""; b.style.left = ""; b.style.top = ""; b.style.transform = "";
       b.style.opacity = "1"; b.style.display = ""; b.style.pointerEvents = "";
     });
   }
-  function _normalizarTamaniosFooter(btnLeft, btnCenter, btnRight) {
-    if (!btnLeft || !btnCenter || !btnRight) return;
-    const r = btnLeft.getBoundingClientRect();
-    const size = Math.round(Math.max(r.width, r.height));
-    [btnCenter, btnRight].forEach(b => { if (!b) return; b.style.width = size + 'px'; b.style.height = size + 'px'; b.style.borderRadius = '50%'; });
-    return size;
-  }
-  function _recentrarCasa(container, btnLeft, btnCenter, btnRight) {
+  function _recentrarCasa(container, btnLeft, btnCenter) {
     if (!container || !btnLeft || !btnCenter) return;
     requestAnimationFrame(() => {
-      _normalizarTamaniosFooter(btnLeft, btnCenter, btnRight);
-      requestAnimationFrame(() => {
-        const fr = container.getBoundingClientRect();
-        const l = btnLeft.getBoundingClientRect();
-        const c = btnCenter.getBoundingClientRect();
+      const fr = container.getBoundingClientRect();
+      const l  = btnLeft.getBoundingClientRect();
+      const c  = btnCenter.getBoundingClientRect();
 
-        let rightRect;
-        const visible = !!(btnRight && btnRight.style.display !== 'none' && btnRight.style.pointerEvents !== 'none' && btnRight.style.opacity !== '0');
-        if (visible) {
-          rightRect = btnRight.getBoundingClientRect();
-        } else {
-          const estLeft = (typeof footerAnchors.centerX === 'number') ? footerAnchors.centerX : (container.clientWidth / 2) - (c.width / 2);
-          rightRect = { left: fr.left + estLeft, width: c.width };
-        }
-        const centerLeft  = (l.left - fr.left) + (l.width / 2);
-        const centerRight = (rightRect.left - fr.left) + (rightRect.width / 2);
-        const centerCasa  = (centerLeft + centerRight) / 2;
-        const casaLeft    = Math.round(centerCasa - (c.width / 2));
-        btnCenter.style.left = `${casaLeft}px`;
-      });
+      // Usamos el “ancla” del centro (posición donde históricamente estaba el 3º botón) o el centro del footer
+      const anchorX = (typeof footerAnchors.centerX === 'number')
+        ? (fr.left + footerAnchors.centerX + (btnCenter.offsetWidth || 0)/2)
+        : (fr.left + (container.clientWidth/2));
+
+      const leftMid  = l.left + l.width/2;
+      const rightMid = anchorX;
+      const targetMid = (leftMid + rightMid) / 2;
+
+      const casaLeft = Math.round((targetMid - fr.left) - (c.width/2));
+      btnCenter.style.position  = 'absolute';
+      btnCenter.style.top       = '50%';
+      btnCenter.style.transform = 'translateY(-50%)';
+      btnCenter.style.left      = `${casaLeft}px`;
     });
   }
-  function layoutFooterGrafico1(container, btnLeft, btnCenter, btnRight){
-    if (!container || !btnLeft || !btnCenter || !btnRight) return;
+  function layoutFooterGrafico1(container, btnLeft, btnCenter){
+    if (!container || !btnLeft || !btnCenter) return;
     const cs = getComputedStyle(container); if (cs.position === 'static') container.style.position = 'relative';
-    const SIZE  = footerAnchors.size || 65;
     const xLeft = (footerAnchors.leftX != null) ? footerAnchors.leftX : 20;
-    const xG2   = (footerAnchors.centerX != null) ? footerAnchors.centerX : ((container.clientWidth/2) - (SIZE/2));
-    [btnLeft, btnCenter, btnRight].forEach(b=>{ b.style.position='absolute'; b.style.top='50%'; b.style.transform='translateY(-50%)'; });
+
+    [btnLeft, btnCenter].forEach(b=>{ 
+      b.style.position='absolute'; b.style.top='50%'; b.style.transform='translateY(-50%)'; 
+    });
     btnLeft.style.left  = `${xLeft}px`;
-    btnRight.style.left = `${xG2}px`;
-    btnRight.style.display = ''; btnRight.style.opacity = '1'; btnRight.style.pointerEvents = 'auto';
-    // Mantenemos estado de footer según fullscreen
+
     const cont = document.querySelector('.footer-controles'); if (cont) cont.style.display = fullscreenMode ? 'none' : '';
-    _recentrarCasa(container, btnLeft, btnCenter, btnRight);
+    _recentrarCasa(container, btnLeft, btnCenter);
   }
-  function layoutFooterGrafico2(container, btnLeft, btnCenter, btnRight){
-    if (!container || !btnLeft || !btnCenter || !btnRight) return;
+  function layoutFooterGrafico2(container, btnLeft, btnCenter){
+    if (!container || !btnLeft || !btnCenter) return;
     const cs = getComputedStyle(container); if (cs.position === 'static') container.style.position = 'relative';
     const xLeft = (footerAnchors.leftX != null) ? footerAnchors.leftX : 20;
-    [btnLeft, btnCenter, btnRight].forEach(b=>{ b.style.position='absolute'; b.style.top='50%'; b.style.transform='translateY(-50%)'; });
-    btnLeft.style.left = `${xLeft}px`;
-    btnRight.style.opacity='0'; btnRight.style.left='-9999px'; btnRight.style.pointerEvents='none';
+
+    [btnLeft, btnCenter].forEach(b=>{ 
+      b.style.position='absolute'; b.style.top='50%'; b.style.transform='translateY(-50%)'; 
+    });
+    btnLeft.style.left  = `${xLeft}px`;
+
     const cont = document.querySelector('.footer-controles'); if (cont) cont.style.display = fullscreenMode ? 'none' : '';
-    _recentrarCasa(container, btnLeft, btnCenter, btnRight);
+    _recentrarCasa(container, btnLeft, btnCenter);
   }
 
-  // ===== BALANCE (=== ORIGINAL ===)
+  // ===== BALANCE (se mantiene igual)
   function getBalanceRightOffset(container){
     try{
       const resetBtn = Array.from(document.querySelectorAll('.footer-controles .btn-small')).find(b => /reset/i.test((b.textContent||'').trim()));
@@ -435,7 +414,7 @@ if (window.__APP_LOADED__) {
   }
 
   // ==========================
-  // MOSTRAR (LISTA / G1 / G2 / IMPORTEXPORT)
+  // MOSTRAR (LISTA / G1 / G2)
   // ==========================
   function mostrar() {
     const movDiv = document.getElementById("movimientos"); if (!movDiv || movDiv.dataset.permiso !== "OK") return;
@@ -443,18 +422,7 @@ if (window.__APP_LOADED__) {
     const filtros = document.querySelector('.filtros-wrapper');
     const footerB = document.querySelector('.footer-controles');
     const listaDiv = document.getElementById("lista");
-    const impPage  = document.getElementById("importExport");
     const modo = movDiv.dataset.modo || "lista";
-
-    // IMPORT / EXPORT (overlay)
-    if (impPage) impPage.classList.add('hidden');
-    if (modo === "importexport") {
-      if (filtros) filtros.style.display = 'none';
-      if (footerB) footerB.style.display  = ''; // el overlay lo tapa
-      if (impPage) impPage.classList.remove('hidden');
-      if (listaDiv) listaDiv.innerHTML = "";
-      return;
-    }
 
     // Visibilidad UI (según fullscreenMode)
     if (filtros) filtros.style.display = fullscreenMode ? 'none' : '';
@@ -464,6 +432,7 @@ if (window.__APP_LOADED__) {
     const fsIds = ["filtroMes","filtroAño","filtroCat","filtroSub","filtroOri"];
     const fs = fsIds.map(id => { const el = document.getElementById(id); return el ? el.value : "TODOS"; });
 
+    // Filtrado + orden
     filtradosGlobal = (movimientos || [])
       .filter(m => {
         const d = (m.f || "").split("-");
@@ -476,7 +445,7 @@ if (window.__APP_LOADED__) {
       })
       .sort((a,b) => new Date(b.f) - new Date(a.f));
 
-    // Balance (texto y color — posición la maneja layoutBalance*)
+    // Balance — color por umbral
     let t = 0; for (let i=0;i<filtradosGlobal.length;i++){ const m = filtradosGlobal[i]; if (!hideCasa || !isCasaCategory(m.c)) t += Number(m.imp)||0; }
     const factor = (fs[0] === "TODOS") ? 12 : 1;
     const balanceEl = document.getElementById("balance");
@@ -488,33 +457,38 @@ if (window.__APP_LOADED__) {
       else balanceEl.style.color = "var(--electric-blue)";
     }
 
-    // Footer: botones
+    // Footer: botones reales (sin placeholders)
     const footerRow = document.querySelector('.footer-row');
-    const plus = ensureThreePlusButtons();
+    const plus = ensureTwoPlusButtons();
     const btnLeft   = plus[0] || null;
     const btnCenter = plus[1] || null;
-    const btnRight  = plus[2] || null;
 
-    [btnLeft, btnCenter, btnRight].forEach(b=>{
+    [btnLeft, btnCenter].forEach(b=>{
       if (!b) return;
-      b.onclick = null;
+      b.onclick = null; b.ondblclick = null;
       b.classList.remove("plus-like","btn-house-anim","active");
       b.style.opacity = "1"; b.style.display = ""; b.style.pointerEvents="";
       b.style.position=""; b.style.left=""; b.style.top=""; b.style.transform="";
     });
-    layoutFooterReset(btnLeft, btnCenter, btnRight);
+    layoutFooterReset(btnLeft, btnCenter);
 
     const aplicarEstadoCasa = () => { if (btnCenter) btnCenter.classList.toggle("active", !!hideCasa); };
 
     if (modo === "graficos") {
-      // Captura anclajes por si cambiaste de modo
       try { captureFooterAnchors(); } catch {}
 
       if (btnLeft){ btnLeft.innerHTML = iconBack(); btnLeft.onclick = () => setModo("lista"); }
-      if (btnCenter){ btnCenter.innerHTML = iconCasa(); btnCenter.classList.add("btn-house-anim"); btnCenter.onclick = () => { toggleCasa(); aplicarEstadoCasa(); }; aplicarEstadoCasa(); }
-      if (btnRight){ btnRight.style.display = ""; btnRight.style.opacity = "1"; btnRight.style.pointerEvents = "auto"; btnRight.innerHTML = iconGraph2(); btnRight.onclick = () => setModo("graficos2"); }
+      if (btnCenter){ 
+        btnCenter.innerHTML = iconCasa(); 
+        btnCenter.classList.add("btn-house-anim"); 
+        // tap: toggle ocultar/mostrar “casa”
+        btnCenter.onclick = () => { toggleCasa(); aplicarEstadoCasa(); };
+        // doble‑tap: cambiar a G2
+        btnCenter.ondblclick = (ev) => { ev.preventDefault(); setModo("graficos2"); };
+        aplicarEstadoCasa();
+      }
 
-      layoutFooterGrafico1(footerRow, btnLeft, btnCenter, btnRight);
+      layoutFooterGrafico1(footerRow, btnLeft, btnCenter);
       layoutBalanceFixed(footerRow, balanceEl);
 
       if (listaDiv) {
@@ -525,10 +499,16 @@ if (window.__APP_LOADED__) {
       try { captureFooterAnchors(); } catch {}
 
       if (btnLeft){ btnLeft.innerHTML = iconBack(); btnLeft.onclick = () => setModo("graficos"); }
-      if (btnCenter){ btnCenter.innerHTML = iconCasa(); btnCenter.classList.add("btn-house-anim"); btnCenter.onclick = () => { toggleCasa(); aplicarEstadoCasa(); }; aplicarEstadoCasa(); }
-      if (btnRight){ btnRight.innerHTML = ""; btnRight.onclick = null; btnRight.style.display = "none"; btnRight.style.pointerEvents = "none"; }
+      if (btnCenter){ 
+        btnCenter.innerHTML = iconCasa(); 
+        btnCenter.classList.add("btn-house-anim"); 
+        btnCenter.onclick = () => { toggleCasa(); aplicarEstadoCasa(); };
+        // doble‑tap: volver a G1
+        btnCenter.ondblclick = (ev) => { ev.preventDefault(); setModo("graficos"); };
+        aplicarEstadoCasa();
+      }
 
-      layoutFooterGrafico2(footerRow, btnLeft, btnCenter, btnRight);
+      layoutFooterGrafico2(footerRow, btnLeft, btnCenter);
       layoutBalanceFixed(footerRow, balanceEl);
 
       if (listaDiv) {
@@ -539,12 +519,8 @@ if (window.__APP_LOADED__) {
       // LISTA
       if (btnLeft){ btnLeft.innerHTML = iconBars(); btnLeft.classList.add("plus-like"); btnLeft.onclick = () => setModo("graficos"); }
       if (btnCenter){ btnCenter.innerHTML = "+"; btnCenter.onclick = () => abrirFormulario(); }
-      if (btnRight){
-        btnRight.innerHTML = ""; btnRight.onclick = null; btnRight.style.display = "none";
-        btnRight.style.position = ""; btnRight.style.left = ""; btnRight.style.top = "";
-        btnRight.style.transform = ""; btnRight.style.opacity = "0";
-      }
-      layoutFooterReset(btnLeft, btnCenter, btnRight);
+
+      layoutFooterReset(btnLeft, btnCenter);
       layoutBalanceReset(balanceEl);
 
       if (listaDiv) {
@@ -561,8 +537,6 @@ if (window.__APP_LOADED__) {
         const loader = document.getElementById("loader"); if (loader) loader.style.display = "none";
       }
     }
-
-    ensureBackupIndicator(); updateBackupIndicator();
   }
 
   // Reajustes al cambiar tamaño: re‑aplica layouts en gráficos
@@ -574,10 +548,9 @@ if (window.__APP_LOADED__) {
     const plus = document.querySelectorAll(".footer-row .plus");
     const btnLeft = plus[0] || null;
     const btnCenter = plus[1] || null;
-    const btnRight = plus[2] || null;
     const balanceEl = document.getElementById('balance');
-    if (modo === "graficos") layoutFooterGrafico1(footerRow, btnLeft, btnCenter, btnRight);
-    else layoutFooterGrafico2(footerRow, btnLeft, btnCenter, btnRight);
+    if (modo === "graficos") layoutFooterGrafico1(footerRow, btnLeft, btnCenter);
+    else layoutFooterGrafico2(footerRow, btnLeft, btnCenter);
     layoutBalanceFixed(footerRow, balanceEl);
   }, 150));
 
@@ -773,7 +746,7 @@ if (window.__APP_LOADED__) {
   }
 
   // ==========================
-  // FORMULARIO / CRUD (sin cambios de fondo)
+  // FORMULARIO / CRUD (igual)
   // ==========================
   function onOrigenChange(origenValor, { preCat = "", preSub = "", esEdicion = false } = {}) {
     const selCat = document.getElementById("categoria");
@@ -989,7 +962,6 @@ if (window.__APP_LOADED__) {
   const volver = () => {
     document.getElementById("form").classList.add("hidden");
     document.getElementById("movimientos").classList.remove("hidden");
-    document.getElementById("importExport")?.classList.add('hidden');
     actualizarListas(); resetPagina(); mostrar();
   };
 
