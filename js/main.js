@@ -33,7 +33,7 @@ if (window.__APP_LOADED__) {
   let rotateReady = false;
   let rotateReadyTimer = null;
 
-  // Escape seguro para HTML
+  // Escape seguro para HTML (corrigido)
   function esc(s){
     return (s ?? '')
       .toString()
@@ -1214,6 +1214,10 @@ if (window.__APP_LOADED__) {
         console.error(err); alert("Error al importar el CSV. Revisa el formato.");
       } finally { e.target.value = ""; }
     };
+
+    reader.onerror = () => alert("No se pudo leer el archivo.");
+    reader.readAsText(file, 'UTF-8');
+  };
 
   // === BACKUPS (rotativo local + indicador) ===
   async function createAndStoreLocalBackup(){
