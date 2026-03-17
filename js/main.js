@@ -1,4 +1,4 @@
-// === main.js v16 — Botón G2 real (sin fantasma) + CASA centrada + Balance consistente + Doble‑tap con giro + Import/Export desde Balance ===
+// === main.js v18 — G2 real (sin fantasma) + CASA centrada + Balance consistente + Doble‑tap ON/OFF + Import/Export desde Balance ===
 if (window.__APP_LOADED__) {
   // Evitar doble carga
 } else {
@@ -29,9 +29,8 @@ if (window.__APP_LOADED__) {
   let hideCasa = false;
   let fullscreenMode = false;
 
-  // Rotación armada tras doble‑tap (solo gráficos)
+  // Volteador (ARMADO por doble‑tap ON/OFF)
   let rotateReady = false;
-  let rotateReadyTimer = null;
 
   // Offset de referencia del balance (medido en Movimientos)
   let balanceRightRef = null;
@@ -182,7 +181,7 @@ if (window.__APP_LOADED__) {
   }
 
   // ==========================
-  // FULLSCREEN + DOBLE‑TAP ARMADO GIRO + ENLACE GUARDAR
+  // FULLSCREEN + DOBLE‑TAP (ON/OFF) + ENLACE GUARDAR
   // ==========================
   function bindGuardarHandlers() {
     const form = document.getElementById('form');
@@ -207,19 +206,28 @@ if (window.__APP_LOADED__) {
     try { sessionStorage.setItem('ui_fullscreen', fullscreenMode ? '1' : '0'); } catch {}
   }
 
-  // Doble‑tap / dblclick para fullscreen + armar rotación si estás en gráficos (PATCH v15)
+  // === INTERRUPTOR DEL VOLTEADOR (ON/OFF con doble‑tap) ===
+  function armRotateIfGraficosNow() {
+    const modo = (document.getElementById("movimientos")?.dataset?.modo) || "lista";
+    if (modo !== "graficos" && modo !== "graficos2") return;
+
+    if (rotateReady) {
+      // Estaba ON → lo apagamos
+      rotateReady = false;
+      try { sessionStorage.removeItem('rotate_ready'); } catch {}
+      console.log("Volteador DESARMADO");
+      return;
+    }
+    // Estaba OFF → lo encendemos
+    rotateReady = true;
+    try { sessionStorage.setItem('rotate_ready', '1'); } catch {}
+    console.log("Volteador ARMADO");
+  }
+
+  // Doble‑tap / doble‑click en zonas no interactivas: fullscreen + interruptor volteador
   let _lastTap = 0; 
   const TAP_WINDOW = 250; // ms
   const isInteractive = (el) => !!(el && el.closest('button, a, select, input, textarea, label, [role="button"], [tabindex]'));
-
-  function armRotateIfGraficosNow() {
-    const modo = (document.getElementById("movimientos")?.dataset?.modo) || "lista";
-    if (modo === "graficos" || modo === "graficos2") {
-      rotateReady = true;
-      clearTimeout(rotateReadyTimer);
-      rotateReadyTimer = setTimeout(() => { rotateReady = false; }, 5000);
-    }
-  }
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
@@ -228,7 +236,10 @@ if (window.__APP_LOADED__) {
       if (document.documentElement) document.documentElement.style.touchAction = 'manipulation';
       if (document.body)           document.body.style.touchAction           = 'manipulation';
 
-      // Doble‑tap sobre zonas no interactivas
+      try { const prevFS = sessionStorage.getItem('ui_fullscreen'); if (prevFS === '1') { fullscreenMode = true; toggleFullscreenUI(); } } catch {}
+      // Restaurar estado armado del volteador si estaba guardado
+      try { if (sessionStorage.getItem('rotate_ready') === '1') rotateReady = true; } catch {}
+
       window.addEventListener('touchstart', (ev) => {
         const t = Date.now();
         const target = ev.target;
@@ -236,7 +247,7 @@ if (window.__APP_LOADED__) {
         if (t - _lastTap <= TAP_WINDOW) {
           ev.preventDefault();
           toggleFullscreenUI();
-          armRotateIfGraficosNow();
+          armRotateIfGraficosNow(); // ON/OFF
           _lastTap = 0;
         } else {
           _lastTap = t;
@@ -248,12 +259,12 @@ if (window.__APP_LOADED__) {
         if (isInteractive(target)) return;
         ev.preventDefault();
         toggleFullscreenUI();
-        armRotateIfGraficosNow();
+        armRotateIfGraficosNow(); // ON/OFF
       }, { passive: false });
 
       bindGuardarHandlers();
 
-      // Botón VOLVER de Import/Export (inferior)
+      // Botón VOLVER de Import/Export (si existe)
       const ieVolver = document.getElementById('ieVolver');
       if (ieVolver) ieVolver.onclick = () => setModo('lista');
     });
@@ -261,13 +272,32 @@ if (window.__APP_LOADED__) {
     bindGuardarHandlers();
   }
 
-  // Rotación: solo en gráficos y solo si está “armado” por doble‑tap
-  window.addEventListener('orientationchange', () => {
+  // === Volteador de pantalla REAL — redibuja en ambos sentidos y NO apaga rotateReady ===
+  function handleRotationRedraw() {
+    if (!rotateReady) return;
     const modo = (document.getElementById("movimientos")?.dataset?.modo) || "lista";
-    if ((modo === "graficos" || modo === "graficos2") && rotateReady) {
+    if (modo === "graficos" || modo === "graficos2") {
       try { captureFooterAnchors(); } catch {}
       mostrar();
-      rotateReady = false;
+    }
+  }
+
+  // API moderna (Android/Chrome/PWA)
+  if (screen.orientation && screen.orientation.addEventListener) {
+    screen.orientation.addEventListener("change", handleRotationRedraw);
+  }
+  // Compatibilidad
+  window.addEventListener("orientationchange", handleRotationRedraw);
+  // Fallback universal (resize con detección real portrait<->landscape)
+  let _lastIsLandscape = null;
+  window.addEventListener("resize", () => {
+    if (!rotateReady) return;
+    const w = window.innerWidth, h = window.innerHeight;
+    const isLandscape = w > h;
+    if (_lastIsLandscape === null) { _lastIsLandscape = isLandscape; return; }
+    if (isLandscape !== _lastIsLandscape) {
+      _lastIsLandscape = isLandscape;
+      handleRotationRedraw();
     }
   });
 
@@ -302,9 +332,8 @@ if (window.__APP_LOADED__) {
     const m = document.getElementById("movimientos");
     const from = m.dataset.modo || 'lista';
     if ((modo === 'graficos' || modo === 'graficos2') && from === 'lista') {
-      // Capturamos anclajes de los dos botones existentes (left + center)
+      // Captura anclajes (left + center) y referencia de balance
       captureFooterAnchors();
-      // Capturamos referencia del balance en su posición natural (Lista)
       captureBalanceRef();
     }
     m.dataset.modo = modo; // "lista" | "graficos" | "graficos2" | "importexport"
@@ -344,12 +373,12 @@ if (window.__APP_LOADED__) {
     const fr = document.querySelector('.footer-row');
     if (!fr) return { btnLeft:null, btnCenter:null, btnRight:null };
 
-    // Tomamos los dos plus que ya existen en el HTML (left + center)
+    // Tomamos los dos plus del HTML (left + center)
     const buttons = Array.from(fr.querySelectorAll('.plus')).slice(0, 2);
     let btnLeft   = buttons[0] || null;
     let btnCenter = buttons[1] || null;
 
-    // Creamos botón derecho real SOLO si estamos en gráficos
+    // Creamos botón derecho real SOLO en gráficos
     const modo = document.getElementById("movimientos")?.dataset?.modo || 'lista';
     let btnRight = document.getElementById('btnRightReal');
 
@@ -531,7 +560,7 @@ if (window.__APP_LOADED__) {
       })
       .sort((a,b) => new Date(b.f) - new Date(a.f));
 
-    // Balance — texto y color
+    // Balance — texto, color y acción Import/Export
     let t = 0; for (let i=0;i<filtradosGlobal.length;i++){ const m = filtradosGlobal[i]; if (!hideCasa || !isCasaCategory(m.c)) t += Number(m.imp)||0; }
     const factor = (fs[0] === "TODOS") ? 12 : 1;
     const balanceEl = document.getElementById("balance");
@@ -541,8 +570,6 @@ if (window.__APP_LOADED__) {
       else if (t <= (750 * factor)) balanceEl.style.color = "var(--warning)";
       else if (t <= (1400 * factor)) balanceEl.style.color = "var(--success)";
       else balanceEl.style.color = "var(--electric-blue)";
-
-      // 🔁 v16: Restaurar acción del BALANCE para abrir Import/Export
       balanceEl.onclick = () => setModo('importexport');
     }
 
@@ -551,7 +578,6 @@ if (window.__APP_LOADED__) {
     if (modo === "importexport") {
       if (impPage) impPage.classList.remove('hidden');
       if (listaDiv) listaDiv.innerHTML = "";
-      // En overlay no forzamos footer/filters; el overlay lo cubre
       return;
     }
 
