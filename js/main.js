@@ -1,4 +1,4 @@
-// === main.js v21.1 — Hotfix: Botón “+” restaurado + Doble‑tap universal sin romper selects + Popups “+ Añadir nuevo…” estables + Indicador topbar + G2 real + CASA centrada + Balance consistente ===
+// === main.js v21.2 — HOTFIXES: Botón “+” infalible + Doble‑tap universal en captura (sin romper selects) + Fallback orientación + Popups “+ Añadir nuevo…” estables + G2 real + CASA centrada + Balance consistente ===
 if (window.__APP_LOADED__) {
   // Evitar doble carga
 } else {
@@ -181,7 +181,7 @@ if (window.__APP_LOADED__) {
   }
 
   // ==========================
-  // INDICADOR (TOPBAR) + FULLSCREEN + DOBLE‑TAP ON/OFF
+  // INDICADOR (TOPBAR) + FULLSCREEN + VOLTEADOR ON/OFF
   // ==========================
   function ensureRotateIndicator(){
     const top = document.querySelector('.topbar'); 
@@ -238,10 +238,11 @@ if (window.__APP_LOADED__) {
     return (modo === 'graficos' || modo === 'graficos2');
   }
 
-  // === Doble‑tap UNIVERSAL a nivel documento (sin romper selects) ===
-  let __dt_last = 0;
-  const __DT_WIN = 280;
-
+  // ==========================
+  // (HOTFIX 2) DOBLE‑TAP UNIVERSAL (CAPTURA) — sin interferir con selects/botones
+  // ==========================
+  let __dt_last_ts = 0;
+  const __DT_WIN = 300;
   function __dt_isInteractive(el){
     if (!el) return false;
     if (el.closest('#form')) return true;
@@ -251,30 +252,29 @@ if (window.__APP_LOADED__) {
     if (el.closest('button, a, select, option, input, textarea, label, [role="button"]')) return true;
     return false;
   }
-
-  // Móvil → touchend
+  // MÓVIL: touchend
   document.addEventListener('touchend', (ev) => {
     if (!isInGraficosMode()) return;
     if (__dt_isInteractive(ev.target)) return;
     const now = ev.timeStamp || Date.now();
-    if (now - __dt_last <= __DT_WIN) {
-      ev.preventDefault(); ev.stopPropagation();
+    if (now - __dt_last_ts <= __DT_WIN) {
+      ev.preventDefault();
+      ev.stopPropagation();
       toggleFullscreenUI();
       armRotateIfGraficosNow();
-      __dt_last = 0;
+      __dt_last_ts = 0;
     } else {
-      __dt_last = now;
+      __dt_last_ts = now;
     }
-  }, { passive: false });
-
-  // Escritorio → dblclick
+  }, { passive: false, capture: true });
+  // ESCRITORIO: dblclick
   document.addEventListener('dblclick', (ev) => {
     if (!isInGraficosMode()) return;
     if (__dt_isInteractive(ev.target)) return;
     ev.preventDefault();
     toggleFullscreenUI();
     armRotateIfGraficosNow();
-  }, { passive: false });
+  }, { passive: false, capture: true });
 
   // ==========================
   // VOLTEADOR — REDIBUJADO AL GIRAR (robusto)
@@ -287,10 +287,22 @@ if (window.__APP_LOADED__) {
       mostrar();
     }
   }
+  // Moderno
   if (screen.orientation && screen.orientation.addEventListener) {
     screen.orientation.addEventListener("change", handleRotationRedraw);
   }
+  // Compatibilidad
   window.addEventListener("orientationchange", handleRotationRedraw);
+  // (HOTFIX 3) Fallback adicional con matchMedia
+  try {
+    const mql = window.matchMedia('(orientation: landscape)');
+    if (mql && mql.addEventListener) {
+      mql.addEventListener('change', () => handleRotationRedraw());
+    } else if (mql && mql.addListener) {
+      mql.addListener(() => handleRotationRedraw());
+    }
+  } catch {}
+  // Resize debounced
   const __redrawOnResize = debounce(() => {
     if (!rotateReady) return;
     const modo = (document.getElementById("movimientos")?.dataset?.modo) || "lista";
@@ -301,7 +313,36 @@ if (window.__APP_LOADED__) {
   }, 120);
   window.addEventListener('resize', () => {
     if (rotateReady) __redrawOnResize();
-  });
+  }, { passive: true });
+
+  // ==========================
+  // (HOTFIX 1) BOTÓN “+” INFALIBLE (captura + estilo de seguridad)
+  // ==========================
+  document.addEventListener('click', function(e){
+    try {
+      const btns = document.querySelectorAll('.footer-row .plus');
+      const center = btns && btns[1]; // 2º botón = central
+      if (!center) return;
+      if (e.target === center || center.contains(e.target)) {
+        e.preventDefault();
+        e.stopPropagation();
+        abrirFormulario();
+      }
+    } catch {}
+  }, true); // CAPTURE
+  (function(){
+    let s = document.getElementById('hotfix-style');
+    if (!s) {
+      s = document.createElement('style');
+      s.id = 'hotfix-style';
+      s.textContent = `
+        .footer-controles { pointer-events: auto !important; z-index: 2147483647 !important; }
+        .footer-row .plus { pointer-events: auto !important; }
+        .premium-overlay.hidden, .nomina-overlay.hidden { pointer-events: none !important; }
+      `;
+      document.head.appendChild(s);
+    }
+  })();
 
   // ==========================
   // ICONOS SVG
@@ -374,12 +415,10 @@ if (window.__APP_LOADED__) {
     const fr = document.querySelector('.footer-row');
     if (!fr) return { btnLeft:null, btnCenter:null, btnRight:null };
 
-    // Tomamos los dos plus del HTML (left + center)
     const buttons = Array.from(fr.querySelectorAll('.plus')).slice(0, 2);
     let btnLeft   = buttons[0] || null;
     let btnCenter = buttons[1] || null;
 
-    // Creamos botón derecho real SOLO en gráficos
     const modo = document.getElementById("movimientos")?.dataset?.modo || 'lista';
     let btnRight = document.getElementById('btnRightReal');
 
@@ -579,7 +618,7 @@ if (window.__APP_LOADED__) {
     if (filtros) filtros.style.display = fullscreenMode ? 'none' : '';
     if (footerB) footerB.style.display  = fullscreenMode ? 'none' : '';
 
-    // Filtrado + orden
+    // Filtros de datos
     const fsIds = ["filtroMes","filtroAño","filtroCat","filtroSub","filtroOri"];
     const fs = fsIds.map(id => { const el = document.getElementById(id); return el ? el.value : "TODOS"; });
 
@@ -1416,11 +1455,11 @@ if (window.__APP_LOADED__) {
         alert(`Importación completa: ${nuevos.length} registros añadidos.`);
       } catch (err) {
         console.error(err); alert("Error al importar el CSV. Revisa el formato.");
-      } finally { e.target.value = ""; }
+      }
     };
 
-  reader.onerror = () => alert("No se pudo leer el archivo.");
-  reader.readAsText(file, 'UTF-8');
+    reader.onerror = () => alert("No se pudo leer el archivo.");
+    reader.readAsText(file, 'UTF-8');
   };
 
   // ==========================
