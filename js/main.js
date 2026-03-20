@@ -1,4 +1,4 @@
-// === main.js v18 — G2 real (sin fantasma) + CASA centrada + Balance consistente + Doble‑tap ON/OFF + Import/Export desde Balance ===
+// === main.js v20 — Indicador en topbar + Doble‑tap ON/OFF (no bloquea selects) + G2 real + CASA centrada + Balance consistente + Import/Export desde Balance ===
 if (window.__APP_LOADED__) {
   // Evitar doble carga
 } else {
@@ -29,13 +29,13 @@ if (window.__APP_LOADED__) {
   let hideCasa = false;
   let fullscreenMode = false;
 
-  // Volteador (ARMADO por doble‑tap ON/OFF)
+  // Volteador (ON/OFF por doble‑tap)
   let rotateReady = false;
 
   // Offset de referencia del balance (medido en Movimientos)
   let balanceRightRef = null;
 
-  // Escape seguro para HTML (corregido)
+  // Escape seguro para HTML
   function esc(s){
     return (s ?? '')
       .toString()
@@ -181,8 +181,30 @@ if (window.__APP_LOADED__) {
   }
 
   // ==========================
-  // FULLSCREEN + DOBLE‑TAP (ON/OFF) + ENLACE GUARDAR
+  // INDICADOR VISUAL (topbar) + FULLSCREEN + DOBLE‑TAP (ON/OFF) + ENLACE GUARDAR
   // ==========================
+  function ensureRotateIndicator(){
+    const top = document.querySelector('.topbar'); 
+    if (!top) return;
+    let ind = document.getElementById('rotateIndicator');
+    if (!ind) {
+      ind = document.createElement('span');
+      ind.id = 'rotateIndicator';
+      ind.title = 'Volteador (doble‑tap en gráficos: ON/OFF)';
+      Object.assign(ind.style, {
+        display:'inline-block', width:'10px', height:'10px', borderRadius:'50%',
+        marginLeft:'8px', verticalAlign:'middle', background:'#999'
+      });
+      top.appendChild(ind);
+    }
+  }
+  function updateRotateIndicator(){
+    const ind = document.getElementById('rotateIndicator'); 
+    if (!ind) return;
+    ind.style.background = rotateReady ? '#22c55e' : '#999';
+    ind.style.boxShadow  = rotateReady ? '0 0 6px #22c55e' : 'none';
+  }
+
   function bindGuardarHandlers() {
     const form = document.getElementById('form');
     if (form && !form.__boundSubmit) {
@@ -215,52 +237,89 @@ if (window.__APP_LOADED__) {
       // Estaba ON → lo apagamos
       rotateReady = false;
       try { sessionStorage.removeItem('rotate_ready'); } catch {}
-      console.log("Volteador DESARMADO");
-      return;
+    } else {
+      // Estaba OFF → lo encendemos
+      rotateReady = true;
+      try { sessionStorage.setItem('rotate_ready', '1'); } catch {}
     }
-    // Estaba OFF → lo encendemos
-    rotateReady = true;
-    try { sessionStorage.setItem('rotate_ready', '1'); } catch {}
-    console.log("Volteador ARMADO");
+    updateRotateIndicator();
   }
 
-  // Doble‑tap / doble‑click en zonas no interactivas: fullscreen + interruptor volteador
-  let _lastTap = 0; 
-  const TAP_WINDOW = 250; // ms
-  const isInteractive = (el) => !!(el && el.closest('button, a, select, input, textarea, label, [role="button"], [tabindex]'));
+  // Utilidad: ¿estamos en gráficos?
+  function isInGraficosMode(){
+    const m = document.getElementById("movimientos");
+    const modo = m?.dataset?.modo || "lista";
+    return (modo === 'graficos' || modo === 'graficos2');
+  }
+
+  // Doble‑tap robusto que NO bloquea selects/cambios
+  let _lastTapTime = 0; 
+  const TAP_WINDOW = 300; // ms
+
+  // Elementos donde NO debe actuar el doble‑tap (para no romper selects ni botones)
+  function isInteractiveForDoubleTap(el){
+    if (!el) return false;
+    // Controles de UI
+    if (el.closest('.footer-controles')) return true;
+    if (el.closest('.footer-row')) return true;
+    if (el.closest('#form')) return true;
+    if (el.closest('.filtros-wrapper')) return true;
+    if (el.closest('button, a, select, option, input, textarea, label, [role="button"]')) return true;
+    // Zonas de gráficos SÍ deben permitir doble‑tap
+    // (no marcamos nada como interactivo aquí)
+    return false;
+  }
+
+  // Usamos touchend para no interferir con los "change" de <select>
+  function onTouchEndForDoubleTap(ev){
+    const target = ev.target;
+    if (!isInGraficosMode()) return;           // Solo en gráficos
+    if (isInteractiveForDoubleTap(target)) return; // No en controles
+
+    const now = Date.now();
+    const delta = now - _lastTapTime;
+
+    if (delta <= TAP_WINDOW) {
+      // Doble‑tap detectado: prevenimos el gesto por si hay handlers debajo (barras/columnas)
+      ev.preventDefault();
+      ev.stopPropagation();
+
+      toggleFullscreenUI();
+      armRotateIfGraficosNow();
+      _lastTapTime = 0;
+    } else {
+      _lastTapTime = now;
+    }
+  }
+
+  // Doble‑click para escritorio
+  function onDblClickForToggle(ev){
+    const target = ev.target;
+    if (!isInGraficosMode()) return;
+    if (isInteractiveForDoubleTap(target)) return;
+    ev.preventDefault();
+    toggleFullscreenUI();
+    armRotateIfGraficosNow();
+  }
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       ensureDefaultPinHash().catch(console.error);
       updateDots();
+
+      // Restaurar fullscreen/rotate y preparar indicador
+      try { const prevFS = sessionStorage.getItem('ui_fullscreen'); if (prevFS === '1') { fullscreenMode = true; toggleFullscreenUI(); } } catch {}
+      try { if (sessionStorage.getItem('rotate_ready') === '1') rotateReady = true; } catch {}
+      ensureRotateIndicator();
+      updateRotateIndicator();
+
+      // Mejora de interacción
       if (document.documentElement) document.documentElement.style.touchAction = 'manipulation';
       if (document.body)           document.body.style.touchAction           = 'manipulation';
 
-      try { const prevFS = sessionStorage.getItem('ui_fullscreen'); if (prevFS === '1') { fullscreenMode = true; toggleFullscreenUI(); } } catch {}
-      // Restaurar estado armado del volteador si estaba guardado
-      try { if (sessionStorage.getItem('rotate_ready') === '1') rotateReady = true; } catch {}
-
-      window.addEventListener('touchstart', (ev) => {
-        const t = Date.now();
-        const target = ev.target;
-        if (isInteractive(target)) return;
-        if (t - _lastTap <= TAP_WINDOW) {
-          ev.preventDefault();
-          toggleFullscreenUI();
-          armRotateIfGraficosNow(); // ON/OFF
-          _lastTap = 0;
-        } else {
-          _lastTap = t;
-        }
-      }, { passive: false });
-
-      window.addEventListener('dblclick', (ev) => {
-        const target = ev.target;
-        if (isInteractive(target)) return;
-        ev.preventDefault();
-        toggleFullscreenUI();
-        armRotateIfGraficosNow(); // ON/OFF
-      }, { passive: false });
+      // Doble‑tap y doble‑click
+      window.addEventListener('touchend', onTouchEndForDoubleTap, { passive: false });
+      window.addEventListener('dblclick', onDblClickForToggle, { passive: false });
 
       bindGuardarHandlers();
 
@@ -270,9 +329,11 @@ if (window.__APP_LOADED__) {
     });
   } else {
     bindGuardarHandlers();
+    ensureRotateIndicator();
+    updateRotateIndicator();
   }
 
-  // === Volteador de pantalla REAL — redibuja en ambos sentidos y NO apaga rotateReady ===
+  // === Volteador de pantalla — redibuja en ambos sentidos sin apagar rotateReady ===
   function handleRotationRedraw() {
     if (!rotateReady) return;
     const modo = (document.getElementById("movimientos")?.dataset?.modo) || "lista";
@@ -650,6 +711,8 @@ if (window.__APP_LOADED__) {
       captureBalanceRef();
     }
 
+    ensureRotateIndicator();
+    updateRotateIndicator();
     ensureBackupIndicator(); updateBackupIndicator();
   }
 
@@ -788,7 +851,7 @@ if (window.__APP_LOADED__) {
     const sumaMes = new Map();
     for (let mov of base) {
       const k = (mov.f || "").slice(0,7);
-      if (!meses.some(x => x.key === k)) continue;
+      // si no existe en los 13 meses, igualmente sumamos para consistencia
       sumaMes.set(k, (sumaMes.get(k) || 0) + (Number(mov.imp) || 0));
     }
 
@@ -857,7 +920,7 @@ if (window.__APP_LOADED__) {
   }
 
   // ==========================
-  // FORMULARIO / CRUD (igual que estabas)
+  // FORMULARIO / CRUD
   // ==========================
   function onOrigenChange(origenValor, { preCat = "", preSub = "", esEdicion = false } = {}) {
     const selCat = document.getElementById("categoria");
@@ -997,7 +1060,7 @@ if (window.__APP_LOADED__) {
   };
 
   // ==========================
-  // GUARDAR — robusto (números EU + value de selects)
+  // GUARDAR
   // ==========================
   const guardar = () => {
     const get = (id) => (document.getElementById(id)?.value ?? "").trim();
@@ -1242,7 +1305,7 @@ if (window.__APP_LOADED__) {
   }, { passive: true });
 
   // ==========================
-  // CSV / BACKUPS / SW / DROPBOX / AUTOSYNC — Íntegro
+  // CSV / BACKUPS / SW / DROPBOX / AUTOSYNC
   // ==========================
   const exportarCSV = () => {
     if (!movimientos || movimientos.length === 0) { alert("No hay datos para exportar."); return; }
