@@ -1,3 +1,94 @@
+*** a/main.js
+--- b/main.js
+@@
+-  const manejarNuevo = (el, tipo) => {
+-    if (el.value !== "+") return;
+-    let n = el.dataset.nuevoValor || "";
+-    el.dataset.nuevoValor = "";
+-    if (!n) { el.value = ""; return; }
+-    const pretty = mostrarBonito(n.trim());
+-    const keyNew = canonicalizeLabel(pretty);
++  // Popup "NUEVO VALOR" (idéntico estilo; reusa premium-overlay/premium-content)
++  function lanzarPopupNuevoValor(tipo, onOk){
++    const overlay = document.createElement('div');
++    overlay.className = 'premium-overlay';
++    overlay.innerHTML = `
++      <div class="premium-content" style="max-width:420px;text-align:center">
++        <div class="premium-title">NUEVO VALOR</div>
++        <div style="margin:10px 0 14px;opacity:.9">
++          ${tipo === 'categoria' ? 'Nueva CATEGORÍA' : 'Nueva SUBCATEGORÍA'}
++        </div>
++        <input id="nv_txt" type="text" placeholder="Escribe aquí..." 
++               style="width:100%;padding:10px;border-radius:8px;
++                      border:1px solid rgba(212,175,55,.35);
++                      background:#0b0f1a;color:#fff;outline:none">
++        <div style="display:flex;gap:10px;justify-content:center;margin-top:16px">
++          <button id="nv_ok" class="btn-silver" style="font-weight:900">AÑADIR</button>
++          <button id="nv_cancel" class="btn-silver">CANCELAR</button>
++        </div>
++      </div>
++    `;
++    document.body.appendChild(overlay);
++    const input   = overlay.querySelector('#nv_txt');
++    const btnOk   = overlay.querySelector('#nv_ok');
++    const btnCan  = overlay.querySelector('#nv_cancel');
++    const close   = () => overlay.remove();
++    btnCan.onclick = close;
++    btnOk.onclick  = () => {
++      const v = (input.value || '').trim();
++      if (!v) { input.focus(); return; }
++      try { onOk && onOk(v); } finally { close(); }
++    };
++    input.addEventListener('keydown', (ev) => {
++      if (ev.key === 'Enter') btnOk.click();
++      else if (ev.key === 'Escape') close();
++    });
++    // Evita que el foco quede en el select en móviles
++    setTimeout(() => input.focus(), 0);
++  }
++
++  const manejarNuevo = (el, tipo) => {
++    if (el.value !== "+") return;
++    // Si nadie ha precargado dataset.nuevoValor, abrimos el popup NUEVO VALOR
++    if (!el.dataset.nuevoValor) {
++      lanzarPopupNuevoValor(tipo, (textoCapturado) => {
++        el.dataset.nuevoValor = textoCapturado;
++        // Re-entramos con el valor capturado para seguir la lógica original
++        manejarNuevo(el, tipo);
++      });
++      return; // Esperar a la interacción del usuario
++    }
++    let n = el.dataset.nuevoValor || "";
++    el.dataset.nuevoValor = "";
++    if (!n) { el.value = ""; return; }
++    const pretty = mostrarBonito(n.trim());
++    const keyNew = canonicalizeLabel(pretty);
+@@
+       if (tipo === "categoria") {
+         const catIdx = buildCanonIndex(catBase, catExtra);
+         if (NOMINA_CATS.some(x => canonicalizeLabel(x) === keyNew)) {
+           alert("No puedes crear manualmente 'Oskar' ni 'Josune'. Selecciona 'Nómina'.");
+           el.value = ""; return;
+         }
+         if (!catIdx.has(keyNew)) {
+           catExtra.push(pretty);
+           localStorage.setItem('categoriaExtra', JSON.stringify(catExtra));
+           scheduleSync('listas');
+         }
+         const origenActual = (document.getElementById("origen")||{}).value || "";
+         llenar("categoria", catBase, catExtra, pretty, { origenActual });
+       } else {
+         const subIdx = buildCanonIndex(subMaestra, []);
+         if (!subIdx.has(keyNew)) {
+           subMaestra.push(pretty);
+           localStorage.setItem('subMaestra_v2', JSON.stringify(subMaestra));
+           scheduleSync('listas');
+         }
+         const origenActual = (document.getElementById("origen")||{}).value || "";
+         llenar("subcategoria", subMaestra, [], pretty, { origenActual });
+       }
+     };
+
 // === main.js v18 — G2 real (sin fantasma) + CASA centrada + Balance consistente + Doble‑tap ON/OFF + Import/Export desde Balance ===
 if (window.__APP_LOADED__) {
   // Evitar doble carga
