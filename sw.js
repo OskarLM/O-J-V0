@@ -1,5 +1,5 @@
 // sw.js — MIS GASTOS (GitHub Pages)
-const CACHE_VERSION = "v1.0.74";
+const CACHE_VERSION = "v1.0.75";
 const CACHE_NAME = `mis-gastos-${CACHE_VERSION}`;
 const BASE = "/APK_V0.0/";
 
