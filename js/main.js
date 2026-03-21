@@ -1076,38 +1076,52 @@ if (window.__APP_LOADED__) {
     actualizarListas(); resetPagina(); mostrar();
   };
 
-  const manejarNuevo = (el, tipo) => {
-    if (el.value !== "+") return;
-    let n = el.dataset.nuevoValor || "";
-    el.dataset.nuevoValor = "";
-    if (!n) { el.value = ""; return; }
-    const pretty = mostrarBonito(n.trim());
-    const keyNew = canonicalizeLabel(pretty);
+const manejarNuevo = (el, tipo) => {
+  if (el.value !== "+") return;
 
-    if (tipo === "categoria") {
-      const catIdx = buildCanonIndex(catBase, catExtra);
-      if (NOMINA_CATS.some(x => canonicalizeLabel(x) === keyNew)) {
-        alert("No puedes crear manualmente 'Oskar' ni 'Josune'. Selecciona 'Nómina'.");
-        el.value = ""; return;
-      }
-      if (!catIdx.has(keyNew)) {
-        catExtra.push(pretty);
-        localStorage.setItem('categoriaExtra', JSON.stringify(catExtra));
-        scheduleSync('listas');
-      }
-      const origenActual = (document.getElementById("origen")||{}).value || "";
-      llenar("categoria", catBase, catExtra, pretty, { origenActual });
-    } else {
-      const subIdx = buildCanonIndex(subMaestra, []);
-      if (!subIdx.has(keyNew)) {
-        subMaestra.push(pretty);
-        localStorage.setItem('subMaestra_v2', JSON.stringify(subMaestra));
-        scheduleSync('listas');
-      }
-      const origenActual = (document.getElementById("origen")||{}).value || "";
-      llenar("subcategoria", subMaestra, [], pretty, { origenActual });
+  // Si nadie precargó dataset.nuevoValor, pedimos el texto al usuario ahora
+  if (!el.dataset.nuevoValor) {
+    const mensaje = (tipo === "categoria")
+      ? "Escribe el nombre de la nueva CATEGORÍA:"
+      : "Escribe el nombre de la nueva SUBCATEGORÍA:";
+    const capturado = (prompt(mensaje) || "").trim();
+    // Restaurar el select si cancelan o queda vacío
+    if (!capturado) { el.value = ""; return; }
+    el.dataset.nuevoValor = capturado;
+  }
+
+  let n = el.dataset.nuevoValor || "";
+  el.dataset.nuevoValor = "";
+  if (!n) { el.value = ""; return; }
+
+  // --- A partir de aquí sigue exactamente tu lógica original ---
+  const pretty = mostrarBonito(n.trim());
+  const keyNew = canonicalizeLabel(pretty);
+
+  if (tipo === "categoria") {
+    const catIdx = buildCanonIndex(catBase, catExtra);
+    if (NOMINA_CATS.some(x => canonicalizeLabel(x) === keyNew)) {
+      alert("No puedes crear manualmente 'Oskar' ni 'Josune'. Selecciona 'Nómina'.");
+      el.value = ""; return;
     }
-  };
+    if (!catIdx.has(keyNew)) {
+      catExtra.push(pretty);
+      localStorage.setItem('categoriaExtra', JSON.stringify(catExtra));
+      scheduleSync('listas');
+    }
+    const origenActual = (document.getElementById("origen")||{}).value || "";
+    llenar("categoria", catBase, catExtra, pretty, { origenActual });
+  } else {
+    const subIdx = buildCanonIndex(subMaestra, []);
+    if (!subIdx.has(keyNew)) {
+      subMaestra.push(pretty);
+      localStorage.setItem('subMaestra_v2', JSON.stringify(subMaestra));
+      scheduleSync('listas');
+    }
+    const origenActual = (document.getElementById("origen")||{}).value || "";
+    llenar("subcategoria", subMaestra, [], pretty, { origenActual });
+  }
+};
 
   const borrarElemento = (tipo) => {
     const select = document.getElementById(tipo);
