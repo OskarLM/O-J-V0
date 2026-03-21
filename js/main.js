@@ -1,94 +1,3 @@
-*** a/main.js
---- b/main.js
-@@
--  const manejarNuevo = (el, tipo) => {
--    if (el.value !== "+") return;
--    let n = el.dataset.nuevoValor || "";
--    el.dataset.nuevoValor = "";
--    if (!n) { el.value = ""; return; }
--    const pretty = mostrarBonito(n.trim());
--    const keyNew = canonicalizeLabel(pretty);
-+  // Popup "NUEVO VALOR" (idéntico estilo; reusa premium-overlay/premium-content)
-+  function lanzarPopupNuevoValor(tipo, onOk){
-+    const overlay = document.createElement('div');
-+    overlay.className = 'premium-overlay';
-+    overlay.innerHTML = `
-+      <div class="premium-content" style="max-width:420px;text-align:center">
-+        <div class="premium-title">NUEVO VALOR</div>
-+        <div style="margin:10px 0 14px;opacity:.9">
-+          ${tipo === 'categoria' ? 'Nueva CATEGORÍA' : 'Nueva SUBCATEGORÍA'}
-+        </div>
-+        <input id="nv_txt" type="text" placeholder="Escribe aquí..." 
-+               style="width:100%;padding:10px;border-radius:8px;
-+                      border:1px solid rgba(212,175,55,.35);
-+                      background:#0b0f1a;color:#fff;outline:none">
-+        <div style="display:flex;gap:10px;justify-content:center;margin-top:16px">
-+          <button id="nv_ok" class="btn-silver" style="font-weight:900">AÑADIR</button>
-+          <button id="nv_cancel" class="btn-silver">CANCELAR</button>
-+        </div>
-+      </div>
-+    `;
-+    document.body.appendChild(overlay);
-+    const input   = overlay.querySelector('#nv_txt');
-+    const btnOk   = overlay.querySelector('#nv_ok');
-+    const btnCan  = overlay.querySelector('#nv_cancel');
-+    const close   = () => overlay.remove();
-+    btnCan.onclick = close;
-+    btnOk.onclick  = () => {
-+      const v = (input.value || '').trim();
-+      if (!v) { input.focus(); return; }
-+      try { onOk && onOk(v); } finally { close(); }
-+    };
-+    input.addEventListener('keydown', (ev) => {
-+      if (ev.key === 'Enter') btnOk.click();
-+      else if (ev.key === 'Escape') close();
-+    });
-+    // Evita que el foco quede en el select en móviles
-+    setTimeout(() => input.focus(), 0);
-+  }
-+
-+  const manejarNuevo = (el, tipo) => {
-+    if (el.value !== "+") return;
-+    // Si nadie ha precargado dataset.nuevoValor, abrimos el popup NUEVO VALOR
-+    if (!el.dataset.nuevoValor) {
-+      lanzarPopupNuevoValor(tipo, (textoCapturado) => {
-+        el.dataset.nuevoValor = textoCapturado;
-+        // Re-entramos con el valor capturado para seguir la lógica original
-+        manejarNuevo(el, tipo);
-+      });
-+      return; // Esperar a la interacción del usuario
-+    }
-+    let n = el.dataset.nuevoValor || "";
-+    el.dataset.nuevoValor = "";
-+    if (!n) { el.value = ""; return; }
-+    const pretty = mostrarBonito(n.trim());
-+    const keyNew = canonicalizeLabel(pretty);
-@@
-       if (tipo === "categoria") {
-         const catIdx = buildCanonIndex(catBase, catExtra);
-         if (NOMINA_CATS.some(x => canonicalizeLabel(x) === keyNew)) {
-           alert("No puedes crear manualmente 'Oskar' ni 'Josune'. Selecciona 'Nómina'.");
-           el.value = ""; return;
-         }
-         if (!catIdx.has(keyNew)) {
-           catExtra.push(pretty);
-           localStorage.setItem('categoriaExtra', JSON.stringify(catExtra));
-           scheduleSync('listas');
-         }
-         const origenActual = (document.getElementById("origen")||{}).value || "";
-         llenar("categoria", catBase, catExtra, pretty, { origenActual });
-       } else {
-         const subIdx = buildCanonIndex(subMaestra, []);
-         if (!subIdx.has(keyNew)) {
-           subMaestra.push(pretty);
-           localStorage.setItem('subMaestra_v2', JSON.stringify(subMaestra));
-           scheduleSync('listas');
-         }
-         const origenActual = (document.getElementById("origen")||{}).value || "";
-         llenar("subcategoria", subMaestra, [], pretty, { origenActual });
-       }
-     };
-
 // === main.js v18 — G2 real (sin fantasma) + CASA centrada + Balance consistente + Doble‑tap ON/OFF + Import/Export desde Balance ===
 if (window.__APP_LOADED__) {
   // Evitar doble carga
@@ -130,9 +39,9 @@ if (window.__APP_LOADED__) {
   function esc(s){
     return (s ?? '')
       .toString()
-      .replace(/&/g,'&amp;')
-      .replace(/</g,'&lt;')
-      .replace(/>/g,'&gt;');
+      .replace(/&amp;/g,'&amp;amp;')
+      .replace(/&lt;/g,'&amp;lt;')
+      .replace(/&gt;/g,'&amp;gt;');
   }
 
   // ==========================
@@ -142,13 +51,13 @@ if (window.__APP_LOADED__) {
   const PIN_ATTEMPTS_KEY  = 'pin_attempts_v1';
   const PIN_COOLDOWN_KEY  = 'pin_cooldown_until';
 
-  function hexToBytes(hex){ const a=[]; for(let i=0;i<hex.length;i+=2) a.push(parseInt(hex.slice(i,i+2),16)); return new Uint8Array(a); }
-  function bytesToBase64(bytes){ if (typeof btoa==='function'){ let bin=''; for(let i=0;i<bytes.length;i++) bin+=String.fromCharCode(bytes[i]); return btoa(bin); } else { return Buffer.from(bytes).toString('base64'); } }
-  function base64ToBytes(b64){ if (typeof atob==='function'){ const bin=atob(b64); const out=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i); return out; } else { return new Uint8Array(Buffer.from(b64,'base64')); } }
+  function hexToBytes(hex){ const a=[]; for(let i=0;i&lt;hex.length;i+=2) a.push(parseInt(hex.slice(i,i+2),16)); return new Uint8Array(a); }
+  function bytesToBase64(bytes){ if (typeof btoa==='function'){ let bin=''; for(let i=0;i&lt;bytes.length;i++) bin+=String.fromCharCode(bytes[i]); return btoa(bin); } else { return Buffer.from(bytes).toString('base64'); } }
+  function base64ToBytes(b64){ if (typeof atob==='function'){ const bin=atob(b64); const out=new Uint8Array(bin.length); for(let i=0;i&lt;bin.length;i++) out[i]=bin.charCodeAt(i); return out; } else { return new Uint8Array(Buffer.from(b64,'base64')); } }
   async function sha256(str){
     const data = new TextEncoder().encode(str);
     const buf  = await crypto.subtle.digest('SHA-256', data);
-    return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    return Array.from(new Uint8Array(buf)).map(b=&gt;b.toString(16).padStart(2,'0')).join('');
   }
   async function ensureDefaultPinHash() {
     const pinHash = localStorage.getItem(PIN_STORAGE_KEY);
@@ -187,40 +96,40 @@ if (window.__APP_LOADED__) {
   // ==========================
   // UTILIDADES / NORMALIZACIÓN
   // ==========================
-  const normalizeKey = (s) => (s ?? "")
+  const normalizeKey = (s) =&gt; (s ?? "")
     .toString().trim().toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
     .replace(/[^\p{L}\p{N}]+/gu,' ')
     .replace(/\s+/g,' ').trim();
-  const singularizeWordEs = (w) => {
+  const singularizeWordEs = (w) =&gt; {
     if (w.endsWith('iones')) return w.slice(0,-5)+'ion';
     if (w.endsWith('ces'))   return w.slice(0,-3)+'z';
     if (w.endsWith('es'))    return w.slice(0,-2);
     if (/[aeiou]s$/.test(w)) return w.slice(0,-1);
     return w;
   };
-  const canonicalizeLabel = (s) => {
+  const canonicalizeLabel = (s) =&gt; {
     const raw = normalizeKey(s);
     return raw
-      .split(/([\/-])/g)
-      .map(tok => (tok==='/' || tok==='-') ? tok : tok.split(' ').map(singularizeWordEs).join(' '))
+      .split(/([\/ -])/g)
+      .map(tok =&gt; (tok==='/' || tok==='-') ? tok : tok.split(' ').map(singularizeWordEs).join(' '))
       .join(' ')
       .replace(/\s*\/\s*/g,'/')
       .replace(/\s*-\s*/g,'-')
       .trim();
   };
-  const mostrarBonito = (s) => {
+  const mostrarBonito = (s) =&gt; {
     const t = (s ?? '').toString().trim();
     if (!t) return t;
     return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
   };
-  const buildCanonIndex = (preferida=[], secundaria=[]) => {
+  const buildCanonIndex = (preferida=[], secundaria=[]) =&gt; {
     const map = new Map();
-    const add = (v) => { const k = canonicalizeLabel(v); if (!map.has(k)) map.set(k, v); };
+    const add = (v) =&gt; { const k = canonicalizeLabel(v); if (!map.has(k)) map.set(k, v); };
     preferida.forEach(add); secundaria.forEach(add);
     return map;
   };
-  function debounce(fn, delay = 150) { let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn.apply(null, args), delay); }; }
+  function debounce(fn, delay = 150) { let t; return (...args) =&gt; { clearTimeout(t); t = setTimeout(() =&gt; fn.apply(null, args), delay); }; }
   function mesFromISO(iso) {
     try {
       if (!iso) return mesesLabel[new Date().getMonth()];
@@ -237,30 +146,30 @@ if (window.__APP_LOADED__) {
   function setAttempts(n){ localStorage.setItem(PIN_ATTEMPTS_KEY, String(n)); }
   function setCooldown(seconds){ localStorage.setItem(PIN_COOLDOWN_KEY, String(Date.now()+seconds*1000)); }
   function isInCooldown(){ const until = parseInt(localStorage.getItem(PIN_COOLDOWN_KEY)||'0',10); return Math.max(0, until - Date.now()); }
-  const updateDots = () => { const dots=document.querySelectorAll('.dot'); for(let i=0;i<dots.length;i++) dots[i].classList.toggle('filled', i < pinActual.length); };
-  const clearPin = () => { pinActual = ""; updateDots(); };
+  const updateDots = () =&gt; { const dots=document.querySelectorAll('.dot'); for(let i=0;i&lt;dots.length;i++) dots[i].classList.toggle('filled', i &lt; pinActual.length); };
+  const clearPin = () =&gt; { pinActual = ""; updateDots(); };
   async function verifyAndUnlock(pinPlain) {
     const remainMs = isInCooldown();
-    if (remainMs > 0) { const s = Math.ceil(remainMs / 1000); alert(`Has superado el número de intentos. Espera ${s} s e inténtalo de nuevo.`); return; }
+    if (remainMs &gt; 0) { const s = Math.ceil(remainMs / 1000); alert(`Has superado el número de intentos. Espera ${s} s e inténtalo de nuevo.`); return; }
     await ensureDefaultPinHash();
     const currentHash = localStorage.getItem(PIN_STORAGE_KEY);
     const givenHash   = await sha256(pinPlain);
     if (givenHash === currentHash) { setAttempts(0); localStorage.removeItem(PIN_COOLDOWN_KEY); unlock(); }
     else {
       const prev = getAttempts() + 1; setAttempts(prev);
-      if (prev >= 5) { setCooldown(60); setAttempts(0); alert("Demasiados intentos fallidos. Bloqueo temporal de 60 segundos."); }
+      if (prev &gt;= 5) { setCooldown(60); setAttempts(0); alert("Demasiados intentos fallidos. Bloqueo temporal de 60 segundos."); }
       else alert("PIN incorrecto");
     }
   }
-  const pressPin = async (n) => {
+  const pressPin = async (n) =&gt; {
     const remain = (typeof isInCooldown === 'function') ? isInCooldown() : 0;
-    if (remain > 0) { const s = Math.ceil(remain / 1000); alert(`Bloqueado temporalmente. Espera ${s} s.`); return; }
-    if (pinActual.length < 4) {
+    if (remain &gt; 0) { const s = Math.ceil(remain / 1000); alert(`Bloqueado temporalmente. Espera ${s} s.`); return; }
+    if (pinActual.length &lt; 4) {
       pinActual += String(n); updateDots();
       if (pinActual.length === 4) { const candidate = pinActual; clearPin(); await ensureDefaultPinHash(); verifyAndUnlock(candidate); }
     }
   };
-  const biometricAuth = async () => { alert("Biometría no implementada aún."); };
+  const biometricAuth = async () =&gt; { alert("Biometría no implementada aún."); };
   function unlock() {
     const auth = document.getElementById("authOverlay");
     if (auth) auth.classList.add('hidden');
@@ -276,13 +185,13 @@ if (window.__APP_LOADED__) {
   // ==========================
   function bindGuardarHandlers() {
     const form = document.getElementById('form');
-    if (form && !form.__boundSubmit) {
-      form.addEventListener('submit', (e) => { e.preventDefault(); guardar(); });
+    if (form &amp;&amp; !form.__boundSubmit) {
+      form.addEventListener('submit', (e) =&gt; { e.preventDefault(); guardar(); });
       form.__boundSubmit = true;
     }
     const btn = document.querySelector('#btnGuardar, #guardar, button[data-guardar]');
-    if (btn && !btn.__boundClick) {
-      btn.addEventListener('click', (e) => { e.preventDefault(); guardar(); });
+    if (btn &amp;&amp; !btn.__boundClick) {
+      btn.addEventListener('click', (e) =&gt; { e.preventDefault(); guardar(); });
       btn.__boundClick = true;
     }
   }
@@ -293,14 +202,14 @@ if (window.__APP_LOADED__) {
     const footer  = document.querySelector('.footer-controles');
     if (filtros) filtros.style.display = fullscreenMode ? 'none' : '';
     if (footer)  footer.style.display  = fullscreenMode ? 'none' : '';
-    requestAnimationFrame(() => mostrar());
+    requestAnimationFrame(() =&gt; mostrar());
     try { sessionStorage.setItem('ui_fullscreen', fullscreenMode ? '1' : '0'); } catch {}
   }
 
   // === INTERRUPTOR DEL VOLTEADOR (ON/OFF con doble‑tap) ===
   function armRotateIfGraficosNow() {
     const modo = (document.getElementById("movimientos")?.dataset?.modo) || "lista";
-    if (modo !== "graficos" && modo !== "graficos2") return;
+    if (modo !== "graficos" &amp;&amp; modo !== "graficos2") return;
 
     if (rotateReady) {
       // Estaba ON → lo apagamos
@@ -318,10 +227,10 @@ if (window.__APP_LOADED__) {
   // Doble‑tap / doble‑click en zonas no interactivas: fullscreen + interruptor volteador
   let _lastTap = 0; 
   const TAP_WINDOW = 250; // ms
-  const isInteractive = (el) => !!(el && el.closest('button, a, select, input, textarea, label, [role="button"], [tabindex]'));
+  const isInteractive = (el) =&gt; !!(el &amp;&amp; el.closest('button, a, select, input, textarea, label, [role="button"], [tabindex]'));
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', () =&gt; {
       ensureDefaultPinHash().catch(console.error);
       updateDots();
       if (document.documentElement) document.documentElement.style.touchAction = 'manipulation';
@@ -331,11 +240,11 @@ if (window.__APP_LOADED__) {
       // Restaurar estado armado del volteador si estaba guardado
       try { if (sessionStorage.getItem('rotate_ready') === '1') rotateReady = true; } catch {}
 
-      window.addEventListener('touchstart', (ev) => {
+      window.addEventListener('touchstart', (ev) =&gt; {
         const t = Date.now();
         const target = ev.target;
         if (isInteractive(target)) return;
-        if (t - _lastTap <= TAP_WINDOW) {
+        if (t - _lastTap &lt;= TAP_WINDOW) {
           ev.preventDefault();
           toggleFullscreenUI();
           armRotateIfGraficosNow(); // ON/OFF
@@ -345,7 +254,7 @@ if (window.__APP_LOADED__) {
         }
       }, { passive: false });
 
-      window.addEventListener('dblclick', (ev) => {
+      window.addEventListener('dblclick', (ev) =&gt; {
         const target = ev.target;
         if (isInteractive(target)) return;
         ev.preventDefault();
@@ -357,7 +266,7 @@ if (window.__APP_LOADED__) {
 
       // Botón VOLVER de Import/Export (si existe)
       const ieVolver = document.getElementById('ieVolver');
-      if (ieVolver) ieVolver.onclick = () => setModo('lista');
+      if (ieVolver) ieVolver.onclick = () =&gt; setModo('lista');
     });
   } else {
     bindGuardarHandlers();
@@ -374,17 +283,17 @@ if (window.__APP_LOADED__) {
   }
 
   // API moderna (Android/Chrome/PWA)
-  if (screen.orientation && screen.orientation.addEventListener) {
+  if (screen.orientation &amp;&amp; screen.orientation.addEventListener) {
     screen.orientation.addEventListener("change", handleRotationRedraw);
   }
   // Compatibilidad
   window.addEventListener("orientationchange", handleRotationRedraw);
-  // Fallback universal (resize con detección real portrait<->landscape)
+  // Fallback universal (resize con detección real portrait&lt;-&gt;landscape)
   let _lastIsLandscape = null;
-  window.addEventListener("resize", () => {
+  window.addEventListener("resize", () =&gt; {
     if (!rotateReady) return;
     const w = window.innerWidth, h = window.innerHeight;
-    const isLandscape = w > h;
+    const isLandscape = w &gt; h;
     if (_lastIsLandscape === null) { _lastIsLandscape = isLandscape; return; }
     if (isLandscape !== _lastIsLandscape) {
       _lastIsLandscape = isLandscape;
@@ -396,25 +305,25 @@ if (window.__APP_LOADED__) {
   // ICONOS SVG
   // ==========================
   function iconBars(){ return `
-    <svg viewBox="0 0 24 24" class="btn-icon" fill="none" stroke="black" stroke-width="3">
-      <line x1="18" y1="20" x2="18" y2="10"></line>
-      <line x1="12" y1="20" x2="12" y2="4"></line>
-      <line x1="6" y1="20" x2="6" y2="14"></line>
-    </svg>`; }
+    &lt;svg viewBox="0 0 24 24" class="btn-icon" fill="none" stroke="black" stroke-width="3"&gt;
+      &lt;line x1="18" y1="20" x2="18" y2="10"&gt;&lt;/line&gt;
+      &lt;line x1="12" y1="20" x2="12" y2="4"&gt;&lt;/line&gt;
+      &lt;line x1="6" y1="20" x2="6" y2="14"&gt;&lt;/line&gt;
+    &lt;/svg&gt;`; }
   function iconBack(){ return `
-    <svg viewBox="0 0 24 24" class="btn-icon" fill="none" stroke="black" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M15 19l-7-7 7-7"></path>
-    </svg>`; }
+    &lt;svg viewBox="0 0 24 24" class="btn-icon" fill="none" stroke="black" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"&gt;
+      &lt;path d="M15 19l-7-7 7-7"&gt;&lt;/path&gt;
+    &lt;/svg&gt;`; }
   function iconGraph2(){ return `
-    <svg viewBox="0 0 24 24" class="btn-icon" fill="none" stroke-width="2.6">
-      <rect x="6" y="7" width="4" height="10" fill="#ef4444" stroke="#ef4444" rx="1"></rect>
-      <rect x="14" y="5" width="4" height="12" fill="#22c55e" stroke="#22c55e" rx="1"></rect>
-    </svg>`; }
+    &lt;svg viewBox="0 0 24 24" class="btn-icon" fill="none" stroke-width="2.6"&gt;
+      &lt;rect x="6" y="7" width="4" height="10" fill="#ef4444" stroke="#ef4444" rx="1"&gt;&lt;/rect&gt;
+      &lt;rect x="14" y="5" width="4" height="12" fill="#22c55e" stroke="#22c55e" rx="1"&gt;&lt;/rect&gt;
+    &lt;/svg&gt;`; }
   function iconCasa(){ return `
-    <svg viewBox="0 0 24 24">
-      <path d="M3 10.5 L12 3 L21 10.5" />
-      <path d="M5 10.5 V20 H10 V15 H14 V20 H19 V10.5" />
-    </svg>`; }
+    &lt;svg viewBox="0 0 24 24"&gt;
+      &lt;path d="M3 10.5 L12 3 L21 10.5" /&gt;
+      &lt;path d="M5 10.5 V20 H10 V15 H14 V20 H19 V10.5" /&gt;
+    &lt;/svg&gt;`; }
 
   // ==========================
   // VISTAS / TOGGLE CASA
@@ -422,7 +331,7 @@ if (window.__APP_LOADED__) {
   function setModo(modo){
     const m = document.getElementById("movimientos");
     const from = m.dataset.modo || 'lista';
-    if ((modo === 'graficos' || modo === 'graficos2') && from === 'lista') {
+    if ((modo === 'graficos' || modo === 'graficos2') &amp;&amp; from === 'lista') {
       // Captura anclajes (left + center) y referencia de balance
       captureFooterAnchors();
       captureBalanceRef();
@@ -433,7 +342,7 @@ if (window.__APP_LOADED__) {
   function toggleCasa(){
     hideCasa = !hideCasa;
     const m = document.getElementById("movimientos");
-    if (m && (m.dataset.modo === "graficos" || m.dataset.modo === "graficos2")) mostrar();
+    if (m &amp;&amp; (m.dataset.modo === "graficos" || m.dataset.modo === "graficos2")) mostrar();
   }
   function isCasaCategory(cat){
     const k = canonicalizeLabel(cat || "");
@@ -488,7 +397,7 @@ if (window.__APP_LOADED__) {
   }
 
   function layoutFooterReset(btnLeft, btnCenter, btnRight){
-    [btnLeft, btnCenter, btnRight].forEach(b=>{
+    [btnLeft, btnCenter, btnRight].forEach(b=&gt;{
       if (!b) return;
       b.style.position = ""; b.style.left = ""; b.style.top = ""; b.style.transform = "";
       b.style.opacity = "1"; b.style.display = ""; b.style.pointerEvents = "";
@@ -498,13 +407,13 @@ if (window.__APP_LOADED__) {
   function _recentrarCasa(container, btnLeft, btnCenter, btnRight) {
     if (!container || !btnLeft || !btnCenter) return;
 
-    requestAnimationFrame(() => {
+    requestAnimationFrame(() =&gt; {
       const fr = container.getBoundingClientRect();
       const l  = btnLeft.getBoundingClientRect();
       const c  = btnCenter.getBoundingClientRect();
 
       let rightRect;
-      const rightVisible = !!(btnRight && getComputedStyle(btnRight).display !== 'none' && btnRight.style.pointerEvents !== 'none' && btnRight.style.opacity !== '0');
+      const rightVisible = !!(btnRight &amp;&amp; getComputedStyle(btnRight).display !== 'none' &amp;&amp; btnRight.style.pointerEvents !== 'none' &amp;&amp; btnRight.style.opacity !== '0');
       if (rightVisible) {
         rightRect = btnRight.getBoundingClientRect();
       } else {
@@ -534,7 +443,7 @@ if (window.__APP_LOADED__) {
     const xLeft  = (footerAnchors.leftX != null)   ? footerAnchors.leftX : 20;
     const xRight = (footerAnchors.centerX != null) ? footerAnchors.centerX : ((container.clientWidth/2) - (SIZE/2));
 
-    [btnLeft, btnCenter].forEach(b=>{
+    [btnLeft, btnCenter].forEach(b=&gt;{
       b.style.position='absolute'; b.style.top='50%'; b.style.transform='translateY(-50%)';
     });
     btnLeft.style.left  = `${xLeft}px`;
@@ -559,7 +468,7 @@ if (window.__APP_LOADED__) {
 
     const xLeft = (footerAnchors.leftX != null) ? footerAnchors.leftX : 20;
 
-    [btnLeft, btnCenter].forEach(b=>{
+    [btnLeft, btnCenter].forEach(b=&gt;{
       b.style.position='absolute'; b.style.top='50%'; b.style.transform='translateY(-50%)';
     });
     btnLeft.style.left = `${xLeft}px`;
@@ -636,32 +545,32 @@ if (window.__APP_LOADED__) {
 
     // Filtros de datos
     const fsIds = ["filtroMes","filtroAño","filtroCat","filtroSub","filtroOri"];
-    const fs = fsIds.map(id => { const el = document.getElementById(id); return el ? el.value : "TODOS"; });
+    const fs = fsIds.map(id =&gt; { const el = document.getElementById(id); return el ? el.value : "TODOS"; });
 
     // Filtrado + orden
     filtradosGlobal = (movimientos || [])
-      .filter(m => {
+      .filter(m =&gt; {
         const d = (m.f || "").split("-");
         const cM = fs[0] === "TODOS" || (parseInt(d[1]) - 1).toString() === fs[0];
         const cA = fs[1] === "TODOS" || d[0] === fs[1];
         const cC = fs[2] === "TODAS" || m.c === fs[2];
         const cS = fs[3] === "TODAS" || m.s === fs[3];
         const cO = fs[4] === "TODOS" || m.o === fs[4];
-        return cM && cA && cC && cS && cO;
+        return cM &amp;&amp; cA &amp;&amp; cC &amp;&amp; cS &amp;&amp; cO;
       })
-      .sort((a,b) => new Date(b.f) - new Date(a.f));
+      .sort((a,b) =&gt; new Date(b.f) - new Date(a.f));
 
     // Balance — texto, color y acción Import/Export
-    let t = 0; for (let i=0;i<filtradosGlobal.length;i++){ const m = filtradosGlobal[i]; if (!hideCasa || !isCasaCategory(m.c)) t += Number(m.imp)||0; }
+    let t = 0; for (let i=0;i&lt;filtradosGlobal.length;i++){ const m = filtradosGlobal[i]; if (!hideCasa || !isCasaCategory(m.c)) t += Number(m.imp)||0; }
     const factor = (fs[0] === "TODOS") ? 12 : 1;
     const balanceEl = document.getElementById("balance");
     if (balanceEl){
       balanceEl.textContent = t.toFixed(2) + " €";
-      if (t < 0) balanceEl.style.color = "var(--danger)";
-      else if (t <= (750 * factor)) balanceEl.style.color = "var(--warning)";
-      else if (t <= (1400 * factor)) balanceEl.style.color = "var(--success)";
+      if (t &lt; 0) balanceEl.style.color = "var(--danger)";
+      else if (t &lt;= (750 * factor)) balanceEl.style.color = "var(--warning)";
+      else if (t &lt;= (1400 * factor)) balanceEl.style.color = "var(--success)";
       else balanceEl.style.color = "var(--electric-blue)";
-      balanceEl.onclick = () => setModo('importexport');
+      balanceEl.onclick = () =&gt; setModo('importexport');
     }
 
     // ====== Import/Export Overlay ======
@@ -676,7 +585,7 @@ if (window.__APP_LOADED__) {
     const footerRow = document.querySelector('.footer-row');
     const { btnLeft, btnCenter, btnRight } = ensureRealButtons();
 
-    [btnLeft, btnCenter, btnRight].forEach(b=>{
+    [btnLeft, btnCenter, btnRight].forEach(b=&gt;{
       if (!b) return;
       b.onclick = null; b.ondblclick = null;
       b.classList.remove("plus-like","btn-house-anim","active");
@@ -685,14 +594,14 @@ if (window.__APP_LOADED__) {
     });
     layoutFooterReset(btnLeft, btnCenter, btnRight);
 
-    const aplicarEstadoCasa = () => { if (btnCenter) btnCenter.classList.toggle("active", !!hideCasa); };
+    const aplicarEstadoCasa = () =&gt; { if (btnCenter) btnCenter.classList.toggle("active", !!hideCasa); };
 
     if (modo === "graficos") {
       try { captureFooterAnchors(); } catch {}
 
-      if (btnLeft){ btnLeft.innerHTML = iconBack(); btnLeft.onclick = () => setModo("lista"); }
-      if (btnCenter){ btnCenter.innerHTML = iconCasa(); btnCenter.classList.add("btn-house-anim"); btnCenter.onclick = () => { toggleCasa(); aplicarEstadoCasa(); }; aplicarEstadoCasa(); }
-      if (btnRight){ btnRight.innerHTML = iconGraph2(); btnRight.onclick = () => setModo("graficos2"); }
+      if (btnLeft){ btnLeft.innerHTML = iconBack(); btnLeft.onclick = () =&gt; setModo("lista"); }
+      if (btnCenter){ btnCenter.innerHTML = iconCasa(); btnCenter.classList.add("btn-house-anim"); btnCenter.onclick = () =&gt; { toggleCasa(); aplicarEstadoCasa(); }; aplicarEstadoCasa(); }
+      if (btnRight){ btnRight.innerHTML = iconGraph2(); btnRight.onclick = () =&gt; setModo("graficos2"); }
 
       layoutFooterGrafico1(footerRow, btnLeft, btnCenter, btnRight);
       layoutBalanceFixedUnified();
@@ -704,8 +613,8 @@ if (window.__APP_LOADED__) {
     } else if (modo === "graficos2") {
       try { captureFooterAnchors(); } catch {}
 
-      if (btnLeft){ btnLeft.innerHTML = iconBack(); btnLeft.onclick = () => setModo("graficos"); }
-      if (btnCenter){ btnCenter.innerHTML = iconCasa(); btnCenter.classList.add("btn-house-anim"); btnCenter.onclick = () => { toggleCasa(); aplicarEstadoCasa(); }; aplicarEstadoCasa(); }
+      if (btnLeft){ btnLeft.innerHTML = iconBack(); btnLeft.onclick = () =&gt; setModo("graficos"); }
+      if (btnCenter){ btnCenter.innerHTML = iconCasa(); btnCenter.classList.add("btn-house-anim"); btnCenter.onclick = () =&gt; { toggleCasa(); aplicarEstadoCasa(); }; aplicarEstadoCasa(); }
       if (btnRight){ btnRight.style.display = 'none'; btnRight.style.pointerEvents = 'none'; btnRight.style.opacity = '0'; }
 
       layoutFooterGrafico2(footerRow, btnLeft, btnCenter, btnRight);
@@ -717,8 +626,8 @@ if (window.__APP_LOADED__) {
       }
     } else {
       // LISTA
-      if (btnLeft){ btnLeft.innerHTML = iconBars(); btnLeft.classList.add("plus-like"); btnLeft.onclick = () => { captureBalanceRef(); setModo("graficos"); }; }
-      if (btnCenter){ btnCenter.innerHTML = "+"; btnCenter.onclick = () => abrirFormulario(); }
+      if (btnLeft){ btnLeft.innerHTML = iconBars(); btnLeft.classList.add("plus-like"); btnLeft.onclick = () =&gt; { captureBalanceRef(); setModo("graficos"); }; }
+      if (btnCenter){ btnCenter.innerHTML = "+"; btnCenter.onclick = () =&gt; abrirFormulario(); }
 
       layoutFooterReset(btnLeft, btnCenter, btnRight);
       layoutBalanceResetUnified();
@@ -726,13 +635,13 @@ if (window.__APP_LOADED__) {
       if (listaDiv) {
         const rows = filtradosGlobal
           .slice(0, registrosVisibles)
-          .map(m => `
-            <div class='card' onclick="abrirFormulario('${m.id}')" style="border-left-color:${m.imp >= 0 ? 'var(--success)' : 'var(--danger)'}">
-              <div class="meta">${esc(m.f.split("-").reverse().join("/"))} • ${esc(m.o)}</div>
-              <b>${esc(m.c)} - ${esc(m.s)}</b>
-              ${m.d ? `<div style="font-size:12px;opacity:.8">${esc(m.d)}</div>` : ''}
-              <div class="monto" style="color:${m.imp >= 0 ? 'var(--success)' : 'var(--danger)'}">${(Number(m.imp)||0).toFixed(2)} €</div>
-            </div>`).join("");
+          .map(m =&gt; `
+            &lt;div class='card' onclick="abrirFormulario('${m.id}')" style="border-left-color:${m.imp &gt;= 0 ? 'var(--success)' : 'var(--danger)'}"&gt;
+              &lt;div class="meta"&gt;${esc(m.f.split("-").reverse().join("/"))} • ${esc(m.o)}&lt;/div&gt;
+              &lt;b&gt;${esc(m.c)} - ${esc(m.s)}&lt;/b&gt;
+              ${m.d ? `&lt;div style="font-size:12px;opacity:.8"&gt;${esc(m.d)}&lt;/div&gt;` : ''}
+              &lt;div class="monto" style="color:${m.imp &gt;= 0 ? 'var(--success)' : 'var(--danger)'}"&gt;${(Number(m.imp)||0).toFixed(2)} €&lt;/div&gt;
+            &lt;/div&gt;`).join("");
         listaDiv.innerHTML = rows;
         const loader = document.getElementById("loader"); if (loader) loader.style.display = "none";
       }
@@ -748,7 +657,7 @@ if (window.__APP_LOADED__) {
   window.addEventListener('resize', debounce(function(){
     const movDiv = document.getElementById("movimientos");
     if (!movDiv) return; const modo = movDiv.dataset.modo || "lista";
-    if (modo !== "graficos" && modo !== "graficos2") return;
+    if (modo !== "graficos" &amp;&amp; modo !== "graficos2") return;
     const footerRow = document.querySelector(".footer-row");
     const { btnLeft, btnCenter, btnRight } = ensureRealButtons();
     if (modo === "graficos") layoutFooterGrafico1(footerRow, btnLeft, btnCenter, btnRight);
@@ -762,90 +671,90 @@ if (window.__APP_LOADED__) {
   function renderizarBarrasGraficos(f) {
     const lista = document.getElementById("lista");
     const elFC = document.getElementById("filtroCat");
-    const filtroCat = (elFC && elFC.value) || "TODAS";
+    const filtroCat = (elFC &amp;&amp; elFC.value) || "TODAS";
     let fuente = filtradosGlobal.slice();
-    if (hideCasa) fuente = fuente.filter(m => !isCasaCategory(m.c));
+    if (hideCasa) fuente = fuente.filter(m =&gt; !isCasaCategory(m.c));
 
     const totales = {};
     if (filtroCat === "TODAS") {
-      for (let m of fuente) if (m.imp < 0) totales[m.c] = (totales[m.c]||0) + Math.abs(m.imp);
+      for (let m of fuente) if (m.imp &lt; 0) totales[m.c] = (totales[m.c]||0) + Math.abs(m.imp);
     } else {
-      for (let m of fuente) if (m.imp < 0 && m.c === filtroCat) totales[m.s] = (totales[m.s]||0) + Math.abs(m.imp);
+      for (let m of fuente) if (m.imp &lt; 0 &amp;&amp; m.c === filtroCat) totales[m.s] = (totales[m.s]||0) + Math.abs(m.imp);
     }
 
     const max = Math.max(...Object.values(totales), 1);
     const titulo = (filtroCat === "TODAS") ? "ANÁLISIS DE GASTO POR CATEGORÍAS" : `SUBCATEGORÍAS DE ${filtroCat}`;
     let html = `
-      <h2 style="color:var(--primary);font-size:18px;text-align:center">${titulo}</h2>
-      <div style="display:flex;justify-content:center;gap:15px;margin-bottom:25px;font-size:19px;font-weight:900">
-        <span style="color:var(--electric-blue)">0-${50*f}€</span>
-        <span style="color:var(--success)">${200*f}€</span>
-        <span style="color:var(--warning)">${500*f}€</span>
-        <span style="color:var(--danger)">+</span>
-      </div>
+      &lt;h2 style="color:var(--primary);font-size:18px;text-align:center"&gt;${titulo}&lt;/h2&gt;
+      &lt;div style="display:flex;justify-content:center;gap:15px;margin-bottom:25px;font-size:19px;font-weight:900"&gt;
+        &lt;span style="color:var(--electric-blue)"&gt;0-${50*f}€&lt;/span&gt;
+        &lt;span style="color:var(--success)"&gt;${200*f}€&lt;/span&gt;
+        &lt;span style="color:var(--warning)"&gt;${500*f}€&lt;/span&gt;
+        &lt;span style="color:var(--danger)"&gt;+&lt;/span&gt;
+      &lt;/div&gt;
     `;
-    const items = Object.entries(totales).sort((a,b)=>b[1]-a[1]);
+    const items = Object.entries(totales).sort((a,b)=&gt;b[1]-a[1]);
     if (!items.length) {
-      lista.innerHTML += html + `<div class="card" style="text-align:center;border:none"><div style="opacity:.8">No hay datos para los filtros seleccionados.</div></div>`;
+      lista.innerHTML += html + `&lt;div class="card" style="text-align:center;border:none"&gt;&lt;div style="opacity:.8"&gt;No hay datos para los filtros seleccionados.&lt;/div&gt;&lt;/div&gt;`;
       return;
     }
-    lista.innerHTML += html + items.map(([label,val])=>{
+    lista.innerHTML += html + items.map(([label,val])=&gt;{
       const t1 = Math.min(val, 50*f),
-            t2 = val > 50*f ? Math.min(val - 50*f ,150*f) : 0,
-            t3 = val > 200*f ? Math.min(val - 200*f,300*f) : 0,
-            t4 = val > 500*f ? (val - 500*f) : 0;
+            t2 = val &gt; 50*f ? Math.min(val - 50*f ,150*f) : 0,
+            t3 = val &gt; 200*f ? Math.min(val - 200*f,300*f) : 0,
+            t4 = val &gt; 500*f ? (val - 500*f) : 0;
       return `
-      <div class="card" style="border:none;background:transparent;cursor:pointer" data-label="${esc(label)}"
-           onclick="handleGraficoBarClick(this.dataset.label)">
-        <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:5px"><span>${esc(label)}</span><b>${val.toFixed(2)} €</b></div>
-        <div style="width:${(val/max)*100}%;height:16px;display:flex;background:#000;border-radius:8px;overflow:hidden;border:1px solid rgba(212,175,55,.2)">
-          <div style="width:${(t1/val)*100}%;background:var(--electric-blue)"></div>
-          <div style="width:${(t2/val)*100}%;background:var(--success)"></div>
-          <div style="width:${(t3/val)*100}%;background:var(--warning)"></div>
-          <div style="width:${(t4/val)*100}%;background:var(--danger)"></div>
-        </div>
-      </div>
+      &lt;div class="card" style="border:none;background:transparent;cursor:pointer" data-label="${esc(label)}"
+           onclick="handleGraficoBarClick(this.dataset.label)"&gt;
+        &lt;div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:5px"&gt;&lt;span&gt;${esc(label)}&lt;/span&gt;&lt;b&gt;${val.toFixed(2)} €&lt;/b&gt;&lt;/div&gt;
+        &lt;div style="width:${(val/max)*100}%;height:16px;display:flex;background:#000;border-radius:8px;overflow:hidden;border:1px solid rgba(212,175,55,.2)"&gt;
+          &lt;div style="width:${(t1/val)*100}%;background:var(--electric-blue)"&gt;&lt;/div&gt;
+          &lt;div style="width:${(t2/val)*100}%;background:var(--success)"&gt;&lt;/div&gt;
+          &lt;div style="width:${(t3/val)*100}%;background:var(--warning)"&gt;&lt;/div&gt;
+          &lt;div style="width:${(t4/val)*100}%;background:var(--danger)"&gt;&lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
       `;
     }).join("");
   }
   function handleGraficoBarClick(label){
     const selCat = document.getElementById('filtroCat');
-    const actual = (selCat && selCat.value) || 'TODAS';
+    const actual = (selCat &amp;&amp; selCat.value) || 'TODAS';
     if (actual === 'TODAS') { if (selCat) selCat.value = label; resetPagina(); mostrar(); return; }
     abrirDetalleMovs(actual, label);
   }
   function abrirDetalleMovs(categoria, subcategoria){
     try {
       let base = filtradosGlobal.slice();
-      if (hideCasa) base = base.filter(m => !isCasaCategory(m.c));
+      if (hideCasa) base = base.filter(m =&gt; !isCasaCategory(m.c));
       const lista = base
-        .filter(m => m.imp < 0 && m.c === categoria && m.s === subcategoria)
-        .sort((a,b)=> new Date(b.f) - new Date(a.f));
-      const total = lista.reduce((acc,m)=>acc + Math.abs(m.imp), 0);
+        .filter(m =&gt; m.imp &lt; 0 &amp;&amp; m.c === categoria &amp;&amp; m.s === subcategoria)
+        .sort((a,b)=&gt; new Date(b.f) - new Date(a.f));
+      const total = lista.reduce((acc,m)=&gt;acc + Math.abs(m.imp), 0);
       const overlay = document.createElement('div');
       overlay.className = 'premium-overlay';
       overlay.innerHTML = `
-        <div class="premium-content" style="max-height:80vh;overflow:auto;text-align:left">
-          <div class="premium-title" style="text-align:center">${esc(categoria)} / ${esc(subcategoria)}</div>
-          <div style="font-weight:900;color:var(--primary);text-align:center;margin-bottom:10px">Total: ${total.toFixed(2)} €</div>
-          <div id="detalleLista">
+        &lt;div class="premium-content" style="max-height:80vh;overflow:auto;text-align:left"&gt;
+          &lt;div class="premium-title" style="text-align:center"&gt;${esc(categoria)} / ${esc(subcategoria)}&lt;/div&gt;
+          &lt;div style="font-weight:900;color:var(--primary);text-align:center;margin-bottom:10px"&gt;Total: ${total.toFixed(2)} €&lt;/div&gt;
+          &lt;div id="detalleLista"&gt;
             ${
               lista.length
-              ? lista.map(m => `
-                <div class="card" style="margin:10px 0;border-left-color:var(--danger)">
-                  <div class="meta">${esc(m.f.split("-").reverse().join("/"))} • ${esc(m.o)}</div>
-                  ${m.d ? `<div style="font-size:13px;opacity:.9;margin-bottom:6px">${esc(m.d)}</div>` : ''}
-                  <div class="monto" style="color:var(--danger)">${Math.abs(m.imp).toFixed(2)} €</div>
-                </div>
+              ? lista.map(m =&gt; `
+                &lt;div class="card" style="margin:10px 0;border-left-color:var(--danger)"&gt;
+                  &lt;div class="meta"&gt;${esc(m.f.split("-").reverse().join("/"))} • ${esc(m.o)}&lt;/div&gt;
+                  ${m.d ? `&lt;div style="font-size:13px;opacity:.9;margin-bottom:6px"&gt;${esc(m.d)}&lt;/div&gt;` : ''}
+                  &lt;div class="monto" style="color:var(--danger)"&gt;${Math.abs(m.imp).toFixed(2)} €&lt;/div&gt;
+                &lt;/div&gt;
               `).join('')
-              : `<div class="card" style="text-align:center;border:none;opacity:.8">No hay movimientos.</div>`
+              : `&lt;div class="card" style="text-align:center;border:none;opacity:.8"&gt;No hay movimientos.&lt;/div&gt;`
             }
-          </div>
-          <button class="btn-silver" id="cerrarDetalle">CERRAR</button>
-        </div>
+          &lt;/div&gt;
+          &lt;button class="btn-silver" id="cerrarDetalle"&gt;CERRAR&lt;/button&gt;
+        &lt;/div&gt;
       `;
       document.body.appendChild(overlay);
-      overlay.querySelector('#cerrarDetalle').onclick = ()=> overlay.remove();
+      overlay.querySelector('#cerrarDetalle').onclick = ()=&gt; overlay.remove();
     } catch (e) {
       console.error(e); alert("No se pudo abrir el detalle.");
     }
@@ -859,69 +768,69 @@ if (window.__APP_LOADED__) {
     const oldChart = lista.querySelector('.g2-wrap'); if (oldChart) oldChart.remove();
 
     const fsIds = ["filtroMes","filtroAño","filtroCat","filtroSub","filtroOri"];
-    const fs = fsIds.map(id => { const el = document.getElementById(id); return el ? el.value : "TODOS"; });
+    const fs = fsIds.map(id =&gt; { const el = document.getElementById(id); return el ? el.value : "TODOS"; });
 
     const hoy = new Date();
     const meses = [];
-    for (let i=12; i>=0; i--){
+    for (let i=12; i&gt;=0; i--){
       const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
       const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
       meses.push({ d, key });
     }
 
-    const filtraOtros = (m) => {
+    const filtraOtros = (m) =&gt; {
       const cC = fs[2] === "TODAS" || m.c === fs[2];
       const cS = fs[3] === "TODAS" || m.s === fs[3];
       const cO = fs[4] === "TODOS" || m.o === fs[4];
-      return cC && cS && cO;
+      return cC &amp;&amp; cS &amp;&amp; cO;
     };
-    const base = (hideCasa ? movimientos.filter(mm => !isCasaCategory(mm.c)) : movimientos).filter(filtraOtros);
+    const base = (hideCasa ? movimientos.filter(mm =&gt; !isCasaCategory(mm.c)) : movimientos).filter(filtraOtros);
     const sumaMes = new Map();
     for (let mov of base) {
       const k = (mov.f || "").slice(0,7);
-      if (!meses.some(x => x.key === k)) continue;
+      if (!meses.some(x =&gt; x.key === k)) continue;
       sumaMes.set(k, (sumaMes.get(k) || 0) + (Number(mov.imp) || 0));
     }
 
-    const valores = meses.map(m => sumaMes.get(m.key) || 0);
-    const maxAbs = Math.max(...valores.map(v => Math.abs(v)), 1);
+    const valores = meses.map(m =&gt; sumaMes.get(m.key) || 0);
+    const maxAbs = Math.max(...valores.map(v =&gt; Math.abs(v)), 1);
     const minBar = 4;
-    const colorPorMes = (t) => {
-      if (t < 0) return "var(--danger)";
-      if (t <= 250) return "var(--warning)";
-      if (t <= 750) return "var(--success)";
+    const colorPorMes = (t) =&gt; {
+      if (t &lt; 0) return "var(--danger)";
+      if (t &lt;= 250) return "var(--warning)";
+      if (t &lt;= 750) return "var(--success)";
       return "var(--electric-blue)";
     };
     const mesesCorta = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-    const fmtEuro = (n) => { const v = Number(n)||0, s = v>=0?"+":"−", a = Math.abs(v).toFixed(2).replace(".",","); return `${s}${a} €`; };
+    const fmtEuro = (n) =&gt; { const v = Number(n)||0, s = v&gt;=0?"+":"−", a = Math.abs(v).toFixed(2).replace(".",","); return `${s}${a} €`; };
 
     let html = `
-      <div class="g2-wrap">
-        <div class="g2-chart" style="position:relative;height:180px;display:grid;grid-template-columns:repeat(13,1fr);gap:10px;align-items:center;margin-bottom:26px;">
-          <div class="g2-baseline" style="position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(212,175,55,.35)"></div>
+      &lt;div class="g2-wrap"&gt;
+        &lt;div class="g2-chart" style="position:relative;height:180px;display:grid;grid-template-columns:repeat(13,1fr);gap:10px;align-items:center;margin-bottom:26px;"&gt;
+          &lt;div class="g2-baseline" style="position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(212,175,55,.35)"&gt;&lt;/div&gt;
     `;
     for (const m of meses){
       const v = sumaMes.get(m.key) || 0;
       const h = Math.max(minBar, (Math.abs(v)/maxAbs) * 80);
-      const pos = v >= 0;
+      const pos = v &gt;= 0;
       const color = colorPorMes(v);
       const mesIdx = new Date(m.key + "-01T00:00:00").getMonth();
       const label = mesesCorta[mesIdx];
       const tipText = `${label} ${m.d.getFullYear()}: ${fmtEuro(v)}`;
       html += `
-      <div class="g2-col" data-key="${m.key}" style="position:relative;height:100%;">
-        <div class="g2-bar ${pos ? 'pos' : 'neg'}" data-h="${h}" style="height:0px;background:${color};"></div>
-        <div class="g2-tip ${pos ? 'tip-pos' : 'tip-neg'}">${tipText}</div>
-        <div class="g2-label" style="position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--primary)">${label}</div>
-      </div>
+      &lt;div class="g2-col" data-key="${m.key}" style="position:relative;height:100%;"&gt;
+        &lt;div class="g2-bar ${pos ? 'pos' : 'neg'}" data-h="${h}" style="height:0px;background:${color};"&gt;&lt;/div&gt;
+        &lt;div class="g2-tip ${pos ? 'tip-pos' : 'tip-neg'}"&gt;${tipText}&lt;/div&gt;
+        &lt;div class="g2-label" style="position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--primary)"&gt;${label}&lt;/div&gt;
+      &lt;/div&gt;
       `;
     }
-    html += `</div></div>`;
+    html += `&lt;/div&gt;&lt;/div&gt;`;
     lista.insertAdjacentHTML('beforeend', html);
 
     requestAnimationFrame(function(){
       const bars = lista.querySelectorAll('.g2-chart .g2-bar');
-      for (let i=0;i<bars.length;i++){
+      for (let i=0;i&lt;bars.length;i++){
         const el = bars[i];
         const target = parseFloat(el.getAttribute('data-h')) || 0;
         el.style.height = target + 'px';
@@ -934,13 +843,13 @@ if (window.__APP_LOADED__) {
       chart.addEventListener('click', function(ev){
         const col = ev.target.closest('.g2-col'); if (!col) return;
         const open = chart.querySelectorAll('.g2-col.show-tip');
-        for (let i=0;i<open.length;i++) if (open[i]!==col) open[i].classList.remove('show-tip');
+        for (let i=0;i&lt;open.length;i++) if (open[i]!==col) open[i].classList.remove('show-tip');
         col.classList.toggle('show-tip');
       });
       document.addEventListener('click', function(ev){
         if (!chart.contains(ev.target)){
           const open = chart.querySelectorAll('.g2-col.show-tip');
-          for (let i=0;i<open.length;i++) open[i].classList.remove('show-tip');
+          for (let i=0;i&lt;open.length;i++) open[i].classList.remove('show-tip');
         }
       });
       chart.setAttribute('data-tipBound','1');
@@ -956,12 +865,12 @@ if (window.__APP_LOADED__) {
     const fechaEl = document.getElementById("fecha");
 
     if (origenValor === "Nómina") {
-      selCat.innerHTML = `<option value="" disabled ${preCat ? '' : 'selected'}>Seleccionar...</option>`;
-      NOMINA_CATS.forEach(c => { selCat.innerHTML += `<option value="${c}" ${c === preCat ? 'selected' : ''}>${c}</option>`; });
+      selCat.innerHTML = `&lt;option value="" disabled ${preCat ? '' : 'selected'}&gt;Seleccionar...&lt;/option&gt;`;
+      NOMINA_CATS.forEach(c =&gt; { selCat.innerHTML += `&lt;option value="${c}" ${c === preCat ? 'selected' : ''}&gt;${c}&lt;/option&gt;`; });
 
       const mesPrefer = preSub || mesFromISO(fechaEl?.value);
-      selSub.innerHTML = `<option value="" disabled ${mesPrefer ? '' : 'selected'}>Seleccionar...</option>`;
-      NOMINA_SUBS.forEach(m => { selSub.innerHTML += `<option value="${m}" ${m === mesPrefer ? 'selected' : ''}>${m}</option>`; });
+      selSub.innerHTML = `&lt;option value="" disabled ${mesPrefer ? '' : 'selected'}&gt;Seleccionar...&lt;/option&gt;`;
+      NOMINA_SUBS.forEach(m =&gt; { selSub.innerHTML += `&lt;option value="${m}" ${m === mesPrefer ? 'selected' : ''}&gt;${m}&lt;/option&gt;`; });
 
       if (preCat)   { selCat.value   = preCat;   selCat.dispatchEvent(new Event('change', { bubbles: true })); }
       if (mesPrefer){ selSub.value   = mesPrefer; selSub.dispatchEvent(new Event('change', { bubbles: true })); }
@@ -977,36 +886,36 @@ if (window.__APP_LOADED__) {
     const overlay = document.createElement('div');
     overlay.className = 'nomina-overlay';
     overlay.innerHTML = `
-      <div class="nomina-content">
-        <div class="nomina-title">¿QUIÉN COBRA?</div>
-        <button class="btn-nomina btn-oskar" id="btn_nom_oskar">OSKAR</button>
-        <button class="btn-nomina btn-josune" id="btn_nom_josune">JOSUNE</button>
-        <button class="btn-nomina btn-cancel" id="btn_nom_cancel">CANCELAR</button>
-      </div>
+      &lt;div class="nomina-content"&gt;
+        &lt;div class="nomina-title"&gt;¿QUIÉN COBRA?&lt;/div&gt;
+        &lt;button class="btn-nomina btn-oskar" id="btn_nom_oskar"&gt;OSKAR&lt;/button&gt;
+        &lt;button class="btn-nomina btn-josune" id="btn_nom_josune"&gt;JOSUNE&lt;/button&gt;
+        &lt;button class="btn-nomina btn-cancel" id="btn_nom_cancel"&gt;CANCELAR&lt;/button&gt;
+      &lt;/div&gt;
     `;
     document.body.appendChild(overlay);
 
-    const close = () => overlay.remove();
+    const close = () =&gt; overlay.remove();
     const selCat = document.getElementById("categoria");
     const selSub = document.getElementById("subcategoria");
     const fechaEl = document.getElementById("fecha");
     const mesPrefer = preSub || mesFromISO(fechaEl?.value);
 
-    selSub.innerHTML = `<option value="" disabled ${mesPrefer ? '' : 'selected'}>Seleccionar...</option>`;
-    NOMINA_SUBS.forEach(m => selSub.innerHTML += `<option value="${m}" ${m===mesPrefer?'selected':''}>${m}</option>`);
+    selSub.innerHTML = `&lt;option value="" disabled ${mesPrefer ? '' : 'selected'}&gt;Seleccionar...&lt;/option&gt;`;
+    NOMINA_SUBS.forEach(m =&gt; selSub.innerHTML += `&lt;option value="${m}" ${m===mesPrefer?'selected':''}&gt;${m}&lt;/option&gt;`);
     if (mesPrefer) { selSub.value = mesPrefer; selSub.dispatchEvent(new Event('change', { bubbles: true })); }
 
-    document.getElementById('btn_nom_oskar').onclick = () => {
-      selCat.innerHTML = `<option value="Oskar" selected>Oskar</option>`;
+    document.getElementById('btn_nom_oskar').onclick = () =&gt; {
+      selCat.innerHTML = `&lt;option value="Oskar" selected&gt;Oskar&lt;/option&gt;`;
       selCat.value = "Oskar"; selCat.dispatchEvent(new Event('change', { bubbles: true }));
       close();
     };
-    document.getElementById('btn_nom_josune').onclick = () => {
-      selCat.innerHTML = `<option value="Josune" selected>Josune</option>`;
+    document.getElementById('btn_nom_josune').onclick = () =&gt; {
+      selCat.innerHTML = `&lt;option value="Josune" selected&gt;Josune&lt;/option&gt;`;
       selCat.value = "Josune"; selCat.dispatchEvent(new Event('change', { bubbles: true }));
       close();
     };
-    document.getElementById('btn_nom_cancel').onclick = () => {
+    document.getElementById('btn_nom_cancel').onclick = () =&gt; {
       const selOrigen = document.getElementById("origen");
       selOrigen.value = "Gasto";
       llenar("categoria", catBase, catExtra, "", { origenActual: "Gasto" });
@@ -1015,39 +924,39 @@ if (window.__APP_LOADED__) {
     };
   }
 
-  const llenar = (id, base, extra, pre = "", opts = {}) => {
+  const llenar = (id, base, extra, pre = "", opts = {}) =&gt; {
     const s = document.getElementById(id);
     const origenActual = opts.origenActual || "";
     if (!s) return;
 
-    s.innerHTML = `<option value="" disabled ${pre === "" ? 'selected' : ''}>Seleccionar...</option>`;
+    s.innerHTML = `&lt;option value="" disabled ${pre === "" ? 'selected' : ''}&gt;Seleccionar...&lt;/option&gt;`;
     let values = [...new Set([...base, ...extra])];
 
     if (id === "categoria") {
       const ocultarNominaCats = origenActual !== "Nómina";
-      if (ocultarNominaCats) values = values.filter(v => !NOMINA_CATS.includes(v));
+      if (ocultarNominaCats) values = values.filter(v =&gt; !NOMINA_CATS.includes(v));
     }
     if (id === "subcategoria") {
       const ocultarMeses = origenActual !== "Nómina";
-      if (ocultarMeses) values = values.filter(v => !NOMINA_SUBS.includes(v));
+      if (ocultarMeses) values = values.filter(v =&gt; !NOMINA_SUBS.includes(v));
     }
 
-    values.sort((a,b)=>a.localeCompare(b,'es')).forEach(v=>{
-      s.innerHTML += `<option value="${v}" ${v === pre ? 'selected' : ''}>${v}</option>`;
+    values.sort((a,b)=&gt;a.localeCompare(b,'es')).forEach(v=&gt;{
+      s.innerHTML += `&lt;option value="${v}" ${v === pre ? 'selected' : ''}&gt;${v}&lt;/option&gt;`;
     });
 
-    if (pre && !values.includes(pre)) s.innerHTML += `<option value="${pre}" selected hidden>${pre}</option>`;
-    if (id !== "origen") s.innerHTML += `<option value="+">+ Añadir nuevo...</option>`;
+    if (pre &amp;&amp; !values.includes(pre)) s.innerHTML += `&lt;option value="${pre}" selected hidden&gt;${pre}&lt;/option&gt;`;
+    if (id !== "origen") s.innerHTML += `&lt;option value="+"&gt;+ Añadir nuevo...&lt;/option&gt;`;
     if (pre) s.value = pre;
   };
 
-  const abrirFormulario = (id = null) => {
+  const abrirFormulario = (id = null) =&gt; {
     const f = document.getElementById("form"),
           mDiv= document.getElementById("movimientos"),
           btnD= document.getElementById("btnEliminarRegistro");
 
     if (id) {
-      let m = movimientos.find(x => x.id.toString() === id.toString());
+      let m = movimientos.find(x =&gt; x.id.toString() === id.toString());
       document.getElementById("editId").value = m.id;
       document.getElementById("fecha").value = m.f;
       llenar("origen", origenBase, [], m.o);
@@ -1067,11 +976,11 @@ if (window.__APP_LOADED__) {
     }
 
     const selOrigen = document.getElementById("origen");
-    selOrigen.onchange = () => onOrigenChange(selOrigen.value);
+    selOrigen.onchange = () =&gt; onOrigenChange(selOrigen.value);
 
     const fechaEl = document.getElementById("fecha");
     if (fechaEl) {
-      fechaEl.onchange = () => {
+      fechaEl.onchange = () =&gt; {
         if (selOrigen.value === "Nómina") {
           const mesPrefer = mesFromISO(fechaEl.value);
           const catActual = (document.getElementById("categoria") || {}).value || "";
@@ -1090,9 +999,9 @@ if (window.__APP_LOADED__) {
   // ==========================
   // GUARDAR — robusto (números EU + value de selects)
   // ==========================
-  const guardar = () => {
-    const get = (id) => (document.getElementById(id)?.value ?? "").trim();
-    const parseEuroNumber = (s) => {
+  const guardar = () =&gt; {
+    const get = (id) =&gt; (document.getElementById(id)?.value ?? "").trim();
+    const parseEuroNumber = (s) =&gt; {
       let t = (s || "").toString().trim();
       t = t.replace(/\.(?=\d{3}(?:\D|$))/g, ""); // miles
       t = t.replace(",", ".");                   // decimal
@@ -1113,10 +1022,10 @@ if (window.__APP_LOADED__) {
     // fallback selects
     const selCat = document.getElementById("categoria");
     const selSub = document.getElementById("subcategoria");
-    if (selCat && !v.categoria && selCat.selectedIndex >= 0) {
+    if (selCat &amp;&amp; !v.categoria &amp;&amp; selCat.selectedIndex &gt;= 0) {
       v.categoria = selCat.options[selCat.selectedIndex].value || selCat.options[selCat.selectedIndex].text;
     }
-    if (selSub && !v.subcategoria && selSub.selectedIndex >= 0) {
+    if (selSub &amp;&amp; !v.subcategoria &amp;&amp; selSub.selectedIndex &gt;= 0) {
       v.subcategoria = selSub.options[selSub.selectedIndex].value || selSub.options[selSub.selectedIndex].text;
     }
 
@@ -1138,7 +1047,7 @@ if (window.__APP_LOADED__) {
     };
 
     if (v.editId) {
-      const idx = movimientos.findIndex(x => x.id.toString() === v.editId.toString());
+      const idx = movimientos.findIndex(x =&gt; x.id.toString() === v.editId.toString());
       if (idx !== -1) movimientos[idx] = m;
     } else {
       movimientos.push(m);
@@ -1154,72 +1063,109 @@ if (window.__APP_LOADED__) {
     const idAEliminar = (document.getElementById("editId")||{}).value;
     if (!idAEliminar) return;
     if (confirm("¿ESTÁS SEGURO DE QUE DESEAS ELIMINAR ESTE REGISTRO?")) {
-      movimientos = movimientos.filter(m => m.id.toString() !== idAEliminar.toString());
+      movimientos = movimientos.filter(m =&gt; m.id.toString() !== idAEliminar.toString());
       localStorage.setItem('movimientos', JSON.stringify(movimientos));
       scheduleSync('eliminar');
       volver();
     }
   }
 
-  const volver = () => {
+  const volver = () =&gt; {
     document.getElementById("form").classList.add("hidden");
     document.getElementById("movimientos").classList.remove("hidden");
     actualizarListas(); resetPagina(); mostrar();
   };
 
-const manejarNuevo = (el, tipo) => {
-  if (el.value !== "+") return;
+  
 
-  // Si nadie precargó dataset.nuevoValor, pedimos el texto al usuario ahora
-  if (!el.dataset.nuevoValor) {
-    const mensaje = (tipo === "categoria")
-      ? "Escribe el nombre de la nueva CATEGORÍA:"
-      : "Escribe el nombre de la nueva SUBCATEGORÍA:";
-    const capturado = (prompt(mensaje) || "").trim();
-    // Restaurar el select si cancelan o queda vacío
-    if (!capturado) { el.value = ""; return; }
-    el.dataset.nuevoValor = capturado;
+  // Popup "NUEVO VALOR" (idéntico estilo; reusa premium-overlay/premium-content)
+  function lanzarPopupNuevoValor(tipo, onOk){
+    const overlay = document.createElement('div');
+    overlay.className = 'premium-overlay';
+    overlay.innerHTML = `
+      <div class="premium-content" style="max-width:420px;text-align:center">
+        <div class="premium-title">NUEVO VALOR</div>
+        <div style="margin:10px 0 14px;opacity:.9">
+          ${tipo === 'categoria' ? 'Nueva CATEGORÍA' : 'Nueva SUBCATEGORÍA'}
+        </div>
+        <input id="nv_txt" type="text" placeholder="Escribe aquí..." 
+               style="width:100%;padding:10px;border-radius:8px;
+                      border:1px solid rgba(212,175,55,.35);
+                      background:#0b0f1a;color:#fff;outline:none">
+        <div style="display:flex;gap:10px;justify-content:center;margin-top:16px">
+          <button id="nv_ok" class="btn-silver" style="font-weight:900">AÑADIR</button>
+          <button id="nv_cancel" class="btn-silver">CANCELAR</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const input   = overlay.querySelector('#nv_txt');
+    const btnOk   = overlay.querySelector('#nv_ok');
+    const btnCan  = overlay.querySelector('#nv_cancel');
+    const close   = () => overlay.remove();
+    btnCan.onclick = close;
+    btnOk.onclick  = () => {
+      const v = (input.value || '').trim();
+      if (!v) { input.focus(); return; }
+      try { onOk && onOk(v); } finally { close(); }
+    };
+    input.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') btnOk.click();
+      else if (ev.key === 'Escape') close();
+    });
+    // Evita que el foco quede en el select en móviles
+    setTimeout(() => input.focus(), 0);
   }
 
-  let n = el.dataset.nuevoValor || "";
-  el.dataset.nuevoValor = "";
-  if (!n) { el.value = ""; return; }
 
-  // --- A partir de aquí sigue exactamente tu lógica original ---
-  const pretty = mostrarBonito(n.trim());
-  const keyNew = canonicalizeLabel(pretty);
+  const manejarNuevo = (el, tipo) => {
+    if (el.value !== "+") return;
+    // Si nadie ha precargado dataset.nuevoValor, abrimos el popup NUEVO VALOR
+    if (!el.dataset.nuevoValor) {
+      lanzarPopupNuevoValor(tipo, (textoCapturado) => {
+        el.dataset.nuevoValor = textoCapturado;
+        // Re-entramos con el valor capturado para seguir la lógica original
+        manejarNuevo(el, tipo);
+      });
+      return; // Esperar a la interacción del usuario
+    }
+    let n = el.dataset.nuevoValor || "";
+    el.dataset.nuevoValor = "";
+    if (!n) { el.value = ""; return; }
 
-  if (tipo === "categoria") {
-    const catIdx = buildCanonIndex(catBase, catExtra);
-    if (NOMINA_CATS.some(x => canonicalizeLabel(x) === keyNew)) {
-      alert("No puedes crear manualmente 'Oskar' ni 'Josune'. Selecciona 'Nómina'.");
-      el.value = ""; return;
-    }
-    if (!catIdx.has(keyNew)) {
-      catExtra.push(pretty);
-      localStorage.setItem('categoriaExtra', JSON.stringify(catExtra));
-      scheduleSync('listas');
-    }
-    const origenActual = (document.getElementById("origen")||{}).value || "";
-    llenar("categoria", catBase, catExtra, pretty, { origenActual });
-  } else {
-    const subIdx = buildCanonIndex(subMaestra, []);
-    if (!subIdx.has(keyNew)) {
-      subMaestra.push(pretty);
-      localStorage.setItem('subMaestra_v2', JSON.stringify(subMaestra));
-      scheduleSync('listas');
-    }
-    const origenActual = (document.getElementById("origen")||{}).value || "";
-    llenar("subcategoria", subMaestra, [], pretty, { origenActual });
-  }
-};
+    const pretty = mostrarBonito(n.trim());
+    const keyNew = canonicalizeLabel(pretty);
 
-  const borrarElemento = (tipo) => {
+    if (tipo === "categoria") {
+      const catIdx = buildCanonIndex(catBase, catExtra);
+      if (NOMINA_CATS.some(x => canonicalizeLabel(x) === keyNew)) {
+        alert("No puedes crear manualmente 'Oskar' ni 'Josune'. Selecciona 'Nómina'.");
+        el.value = ""; return;
+      }
+      if (!catIdx.has(keyNew)) {
+        catExtra.push(pretty);
+        localStorage.setItem('categoriaExtra', JSON.stringify(catExtra));
+        scheduleSync('listas');
+      }
+      const origenActual = (document.getElementById("origen")||{}).value || "";
+      llenar("categoria", catBase, catExtra, pretty, { origenActual });
+    } else {
+      const subIdx = buildCanonIndex(subMaestra, []);
+      if (!subIdx.has(keyNew)) {
+        subMaestra.push(pretty);
+        localStorage.setItem('subMaestra_v2', JSON.stringify(subMaestra));
+        scheduleSync('listas');
+      }
+      const origenActual = (document.getElementById("origen")||{}).value || "";
+      llenar("subcategoria", subMaestra, [], pretty, { origenActual });
+    }
+  };
+const borrarElemento = (tipo) =&gt; {
     const select = document.getElementById(tipo);
-    const val = select && select.value; if (!val) return;
+    const val = select &amp;&amp; select.value; if (!val) return;
     if (tipo === 'categoria') {
       const idx = catExtra.indexOf(val);
-      if (idx >= 0) {
+      if (idx &gt;= 0) {
         catExtra.splice(idx,1);
         localStorage.setItem('categoriaExtra', JSON.stringify(catExtra));
         scheduleSync('listas');
@@ -1230,7 +1176,7 @@ const manejarNuevo = (el, tipo) => {
       }
     } else if (tipo === 'subcategoria') {
       const idx = subMaestra.indexOf(val);
-      if (idx >= 0) {
+      if (idx &gt;= 0) {
         subMaestra.splice(idx,1);
         localStorage.setItem('subMaestra_v2', JSON.stringify(subMaestra));
         scheduleSync('listas');
@@ -1240,30 +1186,30 @@ const manejarNuevo = (el, tipo) => {
     }
   };
 
-  const abrirGraficos = () => {
+  const abrirGraficos = () =&gt; {
     const m = document.getElementById("movimientos");
     m.dataset.modo = (m.dataset.modo === "graficos") ? "lista" : "graficos";
     mostrar();
   };
 
-  const resetPagina = () => { registrosVisibles = 25; window.scrollTo(0,0); };
+  const resetPagina = () =&gt; { registrosVisibles = 25; window.scrollTo(0,0); };
 
-  const actualizarListas = () => {
+  const actualizarListas = () =&gt; {
     const fC = document.getElementById("filtroCat"),
           fS = document.getElementById("filtroSub"),
           fO = document.getElementById("filtroOri");
 
     if (fC){
-      fC.innerHTML = '<option value="TODAS">Cat: TODAS</option>';
-      [...new Set([...catBase, ...catExtra, ...NOMINA_CATS])].sort().forEach(c => fC.add(new Option(c, c)));
+      fC.innerHTML = '&lt;option value="TODAS"&gt;Cat: TODAS&lt;/option&gt;';
+      [...new Set([...catBase, ...catExtra, ...NOMINA_CATS])].sort().forEach(c =&gt; fC.add(new Option(c, c)));
     }
     if (fS){
-      fS.innerHTML = '<option value="TODAS">Sub: TODAS</option>';
-      [...new Set([...subMaestra, ...NOMINA_SUBS])].sort().forEach(s => fS.add(new Option(s, s)));
+      fS.innerHTML = '&lt;option value="TODAS"&gt;Sub: TODAS&lt;/option&gt;';
+      [...new Set([...subMaestra, ...NOMINA_SUBS])].sort().forEach(s =&gt; fS.add(new Option(s, s)));
     }
     if (fO){
-      fO.innerHTML = '<option value="TODOS">Ori: TODOS</option>';
-      origenBase.forEach(o => fO.add(new Option(o, o)));
+      fO.innerHTML = '&lt;option value="TODOS"&gt;Ori: TODOS&lt;/option&gt;';
+      origenBase.forEach(o =&gt; fO.add(new Option(o, o)));
     }
   };
 
@@ -1271,14 +1217,14 @@ const manejarNuevo = (el, tipo) => {
   // NORMALIZACIÓN RETROACTIVA
   // ==========================
   function normalizarListasExistentes(){
-    const vistosCat = new Set(Object.values(catBase).map(v => canonicalizeLabel(v)));
+    const vistosCat = new Set(Object.values(catBase).map(v =&gt; canonicalizeLabel(v)));
     const nuevaExtra = [];
     const unicosExtra = [...new Set(catExtra)];
     for (let v of unicosExtra){
       const k = canonicalizeLabel(v);
       if (vistosCat.has(k)) continue;
-      if (NOMINA_CATS.map(canonicalizeLabel).indexOf(k) >= 0) continue;
-      if (!nuevaExtra.some(x => canonicalizeLabel(x)===k)) nuevaExtra.push(v);
+      if (NOMINA_CATS.map(canonicalizeLabel).indexOf(k) &gt;= 0) continue;
+      if (!nuevaExtra.some(x =&gt; canonicalizeLabel(x)===k)) nuevaExtra.push(v);
       vistosCat.add(k);
     }
     catExtra = nuevaExtra; localStorage.setItem('categoriaExtra', JSON.stringify(catExtra));
@@ -1295,7 +1241,7 @@ const manejarNuevo = (el, tipo) => {
     const subIndexCanon = buildCanonIndex([...subMaestra, ...NOMINA_SUBS], []);
 
     let cambiado = false;
-    movimientos = movimientos.map(m=>{
+    movimientos = movimientos.map(m=&gt;{
       const kc = canonicalizeLabel(m.c);
       const ks = canonicalizeLabel(m.s);
       let c = m.c, s = m.s;
@@ -1306,7 +1252,7 @@ const manejarNuevo = (el, tipo) => {
         return {...m, c, s, ts: Math.max(Date.now(), (m.ts||0)+1)};
       }
       return m;
-    }).sort((a,b)=>new Date(b.f)-new Date(a.f));
+    }).sort((a,b)=&gt;new Date(b.f)-new Date(a.f));
 
     if (cambiado) localStorage.setItem('movimientos', JSON.stringify(movimientos));
   }
@@ -1314,18 +1260,18 @@ const manejarNuevo = (el, tipo) => {
   // ==========================
   // INIT + SCROLL INFINITO
   // ==========================
-  const init = () => {
+  const init = () =&gt; {
     const fM = document.getElementById("filtroMes"),
           fA = document.getElementById("filtroAño"),
           hoy = new Date();
     if (fM){
-      fM.innerHTML = '<option value="TODOS">Mes: TODOS</option>';
-      for (let i=0;i<mesesLabel.length;i++) fM.add(new Option(mesesLabel[i], i));
+      fM.innerHTML = '&lt;option value="TODOS"&gt;Mes: TODOS&lt;/option&gt;';
+      for (let i=0;i&lt;mesesLabel.length;i++) fM.add(new Option(mesesLabel[i], i));
       fM.value = hoy.getMonth();
     }
     if (fA){
-      fA.innerHTML = '<option value="TODOS">Año: TODOS</option>';
-      for (let a = 2020; a <= 2030; a++) fA.add(new Option(a, a));
+      fA.innerHTML = '&lt;option value="TODOS"&gt;Año: TODOS&lt;/option&gt;';
+      for (let a = 2020; a &lt;= 2030; a++) fA.add(new Option(a, a));
       fA.value = hoy.getFullYear();
     }
     normalizarListasExistentes();
@@ -1334,10 +1280,10 @@ const manejarNuevo = (el, tipo) => {
   };
 
   let _renderLock = false;
-  window.addEventListener('scroll', () => {
+  window.addEventListener('scroll', () =&gt; {
     const movDiv = document.getElementById("movimientos");
     if (!movDiv || movDiv.dataset.modo !== "lista") return;
-    if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 200 && registrosVisibles < filtradosGlobal.length) {
+    if ((window.innerHeight + window.scrollY) &gt;= document.body.offsetHeight - 200 &amp;&amp; registrosVisibles &lt; filtradosGlobal.length) {
       if (_renderLock) return;
       _renderLock = true;
       const loader = document.getElementById("loader");
@@ -1349,14 +1295,14 @@ const manejarNuevo = (el, tipo) => {
   // ==========================
   // CSV / BACKUPS / SW / DROPBOX / AUTOSYNC — Íntegro
   // ==========================
-  const exportarCSV = () => {
+  const exportarCSV = () =&gt; {
     if (!movimientos || movimientos.length === 0) { alert("No hay datos para exportar."); return; }
     const SEP = ";";
-    const toESDate = (iso) => { const [y,m,d] = (iso||"").split("-"); return (y&&m&&d)?`${d}/${m}/${y}`:(iso||""); };
-    const csvCell = (v) => { let t=(v??"").toString().replace(/\r?\n/g,"⏎"); if(/[;"\n]/.test(t)) t='"'+t.replace(/"/g,'""')+'"'; return t; };
+    const toESDate = (iso) =&gt; { const [y,m,d] = (iso||"").split("-"); return (y&amp;&amp;m&amp;&amp;d)?`${d}/${m}/${y}`:(iso||""); };
+    const csvCell = (v) =&gt; { let t=(v??"").toString().replace(/\r?\n/g,"⏎"); if(/[;"\n]/.test(t)) t='"'+t.replace(/"/g,'""')+'"'; return t; };
 
     const headers = ["Fecha","Origen","Categoria","Subcategoria","Importe","Descripcion"].join(SEP);
-    const rows = movimientos.map(m => [toESDate(m.f), m.o||"", m.c||"", m.s||"", (Number(m.imp)||0), (m.d??"").trim()].map(csvCell).join(SEP));
+    const rows = movimientos.map(m =&gt; [toESDate(m.f), m.o||"", m.c||"", m.s||"", (Number(m.imp)||0), (m.d??"").trim()].map(csvCell).join(SEP));
     const csv = [headers, ...rows].join("\n");
 
     const hoy = new Date(),
@@ -1371,62 +1317,62 @@ const manejarNuevo = (el, tipo) => {
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
   };
 
-  const importarCSV = (e) => {
-    const file = e.target.files && e.target.files[0]; if (!file) return;
+  const importarCSV = (e) =&gt; {
+    const file = e.target.files &amp;&amp; e.target.files[0]; if (!file) return;
     const reader = new FileReader();
 
-    reader.onload = () => {
+    reader.onload = () =&gt; {
       try {
         const text = reader.result.replace(/^\uFEFF/,"");
-        const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+        const lines = text.split(/\r?\n/).filter(l =&gt; l.trim().length &gt; 0);
         if (!lines.length) { alert("El archivo está vacío."); return; }
 
         const header = lines[0];
         const counts = { tab:(header.match(/\t/g)||[]).length, semi:(header.match(/;/g)||[]).length, comma:(header.match(/,/g)||[]).length };
-        let delim = "\t"; if (counts.semi>=counts.tab && counts.semi>=counts.comma) delim=";"; else if (counts.comma>=counts.tab) delim=",";
+        let delim = "\t"; if (counts.semi&gt;=counts.tab &amp;&amp; counts.semi&gt;=counts.comma) delim=";"; else if (counts.comma&gt;=counts.tab) delim=",";
 
-        const parseLine = (line) => {
+        const parseLine = (line) =&gt; {
           const out=[]; let cur="", inQ=false;
-          for(let i=0;i<line.length;i++){
+          for(let i=0;i&lt;line.length;i++){
             const ch=line[i];
             if(ch=='"'){
-              if(inQ && line[i+1]=='"'){ cur+='"'; i++; } else inQ=!inQ;
-            } else if(ch===delim && !inQ){
+              if(inQ &amp;&amp; line[i+1]=='"'){ cur+='"'; i++; } else inQ=!inQ;
+            } else if(ch===delim &amp;&amp; !inQ){
               out.push(cur); cur="";
             } else { cur+=ch; }
           }
           out.push(cur); return out;
         };
 
-        const cols = parseLine(header).map(h=>h.trim().toLowerCase());
+        const cols = parseLine(header).map(h=&gt;h.trim().toLowerCase());
         const idx = {
-          fecha: cols.findIndex(c => c.startsWith("fecha")),
-          origen: cols.findIndex(c => c.startsWith("origen")),
-          categoria: cols.findIndex(c => c.startsWith("categoria")),
-          subcategoria: cols.findIndex(c => c.startsWith("subcategoria")),
-          importe: cols.findIndex(c => c.startsWith("importe")),
-          descripcion: cols.findIndex(c => c.startsWith("descripcion") || c.startsWith("descripción"))
+          fecha: cols.findIndex(c =&gt; c.startsWith("fecha")),
+          origen: cols.findIndex(c =&gt; c.startsWith("origen")),
+          categoria: cols.findIndex(c =&gt; c.startsWith("categoria")),
+          subcategoria: cols.findIndex(c =&gt; c.startsWith("subcategoria")),
+          importe: cols.findIndex(c =&gt; c.startsWith("importe")),
+          descripcion: cols.findIndex(c =&gt; c.startsWith("descripcion") || c.startsWith("descripción"))
         };
 
         const required = ["fecha","origen","categoria","subcategoria","importe"];
-        const missing = required.filter(k => idx[k] < 0);
+        const missing = required.filter(k =&gt; idx[k] &lt; 0);
         if (missing.length) { alert("Faltan columnas: " + missing.join(", ")); return; }
 
-        const toISODate = (ddmmyyyy) => {
+        const toISODate = (ddmmyyyy) =&gt; {
           const m=ddmmyyyy.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
           if(!m) return ddmmyyyy;
           return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
         };
-        const parseEuroNumber = (s) => {
+        const parseEuroNumber = (s) =&gt; {
           let t=(s||'').toString().trim();
           t=t.replace(/\.(?=\d{3}(?:\D|$))/g,''); // miles
           t=t.replace(',', '.'); // decimal
           const n=parseFloat(t); return isNaN(n)?0:n;
         };
-        const cleanText = (s) => {
+        const cleanText = (s) =&gt; {
           if(!s) return "";
           let t=s.replace(/\\"{2,}/g,'"').trim();
-          if(t.startsWith('"') && t.endsWith('"')) t=t.slice(1,-1);
+          if(t.startsWith('"') &amp;&amp; t.endsWith('"')) t=t.slice(1,-1);
           return t.trim();
         };
 
@@ -1434,9 +1380,9 @@ const manejarNuevo = (el, tipo) => {
         const subIndexCanon = buildCanonIndex([...subMaestra, ...NOMINA_SUBS], []);
         const nuevos = [];
 
-        for (let i = 1; i < lines.length; i++) {
+        for (let i = 1; i &lt; lines.length; i++) {
           const arr = parseLine(lines[i]);
-          if (arr.every(v => (v||'').trim()==='')) continue;
+          if (arr.every(v =&gt; (v||'').trim()==='')) continue;
 
           const f = toISODate(cleanText(arr[idx.fecha] ?? ''));
           let o = cleanText(arr[idx.origen] ?? '');
@@ -1452,28 +1398,28 @@ const manejarNuevo = (el, tipo) => {
           if (subIndexCanon.has(keyS)) s = subIndexCanon.get(keyS);
 
           let imp = parseFloat(parseEuroNumber(arr[idx.importe] ?? '0'));
-          if (o === 'Gasto' && imp > 0) imp = -Math.abs(imp);
-          if (o !== 'Gasto' && imp < 0) imp = Math.abs(imp);
+          if (o === 'Gasto' &amp;&amp; imp &gt; 0) imp = -Math.abs(imp);
+          if (o !== 'Gasto' &amp;&amp; imp &lt; 0) imp = Math.abs(imp);
 
           const mov = { id:`id_${Date.now()}_${i}`, f, o, c, s, imp, d, ts: Date.now()+i };
           if (!f || !o || !c || !s || isNaN(imp)) continue;
           nuevos.push(mov);
         }
 
-        const addIfNewCanon = (list, storeKey, value) => {
+        const addIfNewCanon = (list, storeKey, value) =&gt; {
           const k = canonicalizeLabel(value);
-          const exists = list.some(v => canonicalizeLabel(v) === k);
+          const exists = list.some(v =&gt; canonicalizeLabel(v) === k);
           if (!exists) { list.push(value); localStorage.setItem(storeKey, JSON.stringify(list)); }
         };
 
-        nuevos.forEach(m=>{
-          if (![...catBase, ...catExtra, ...NOMINA_CATS].some(v => canonicalizeLabel(v) === canonicalizeLabel(m.c)))
+        nuevos.forEach(m=&gt;{
+          if (![...catBase, ...catExtra, ...NOMINA_CATS].some(v =&gt; canonicalizeLabel(v) === canonicalizeLabel(m.c)))
             addIfNewCanon(catExtra, 'categoriaExtra', m.c);
-          if (![...subMaestra, ...NOMINA_SUBS].some(v => canonicalizeLabel(v) === canonicalizeLabel(m.s)))
+          if (![...subMaestra, ...NOMINA_SUBS].some(v =&gt; canonicalizeLabel(v) === canonicalizeLabel(m.s)))
             addIfNewCanon(subMaestra, 'subMaestra_v2', m.s);
         });
 
-        movimientos = [...movimientos, ...nuevos].sort((a,b)=>new Date(b.f)-new Date(a.f));
+        movimientos = [...movimientos, ...nuevos].sort((a,b)=&gt;new Date(b.f)-new Date(a.f));
         localStorage.setItem('movimientos', JSON.stringify(movimientos));
         scheduleSync('importarCSV');
         actualizarListas(); resetPagina(); mostrar();
@@ -1483,7 +1429,7 @@ const manejarNuevo = (el, tipo) => {
       } finally { e.target.value = ""; }
     };
 
-    reader.onerror = () => alert("No se pudo leer el archivo.");
+    reader.onerror = () =&gt; alert("No se pudo leer el archivo.");
     reader.readAsText(file, 'UTF-8');
   };
 
@@ -1506,7 +1452,7 @@ const manejarNuevo = (el, tipo) => {
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }
-  const ejecutarBackupRotativo = async () => {
+  const ejecutarBackupRotativo = async () =&gt; {
     try{
       const enc=await createAndStoreLocalBackup();
       await downloadEncryptedBackup(enc,'mis_gastos_backup.json');
@@ -1520,15 +1466,15 @@ const manejarNuevo = (el, tipo) => {
       const span=document.createElement('span');
       span.id='backupIndicator';
       span.className='backup-indicator';
-      span.innerHTML=`<span class="dot"></span><span class="txt">Última copia: —</span>`;
+      span.innerHTML=`&lt;span class="dot"&gt;&lt;/span&gt;&lt;span class="txt"&gt;Última copia: —&lt;/span&gt;`;
       top.appendChild(span);
     }
   }
   function humanAgo(ts){
     if (!ts) return "—";
     const diff=Date.now()-ts, s=Math.floor(diff/1000);
-    if (s<60) return `hace ${s}s`;
-    const m=Math.floor(s/60); if (m<60) return `hace ${m}m`;
+    if (s&lt;60) return `hace ${s}s`;
+    const m=Math.floor(s/60); if (m&lt;60) return `hace ${m}m`;
     const h=Math.floor(m/60); return `hace ${h}h`;
   }
   function updateBackupIndicator(){
@@ -1539,8 +1485,8 @@ const manejarNuevo = (el, tipo) => {
     if (!ts) el.classList.add('old');
     else {
       const mins=(Date.now()-ts)/60000;
-      if (mins>1440) el.classList.add('old');
-      else if (mins>60) el.classList.add('stale');
+      if (mins&gt;1440) el.classList.add('old');
+      else if (mins&gt;60) el.classList.add('stale');
     }
   }
   setInterval(updateBackupIndicator, 60000);
@@ -1571,7 +1517,7 @@ const manejarNuevo = (el, tipo) => {
   }
   function dbx_randomString(len=64) {
     const arr = new Uint8Array(len); crypto.getRandomValues(arr);
-    return Array.from(arr).map(b => ('0'+b.toString(16)).slice(-2)).join('');
+    return Array.from(arr).map(b =&gt; ('0'+b.toString(16)).slice(-2)).join('');
   }
   function dbx_getTokens(){ try {return JSON.parse(localStorage.getItem('dbx_tokens')||'{}');} catch { return null; } }
   function dbx_setTokens(t){ localStorage.setItem('dbx_tokens', JSON.stringify(t||{})); }
@@ -1595,7 +1541,7 @@ const manejarNuevo = (el, tipo) => {
 
   async function dbx_getValidAccessToken(){
     let t = dbx_getTokens(); if (!t) return null;
-    if (t.access_token && t.expires_at && Date.now() < t.expires_at) return t.access_token;
+    if (t.access_token &amp;&amp; t.expires_at &amp;&amp; Date.now() &lt; t.expires_at) return t.access_token;
     if (t.refresh_token) {
       const body = new URLSearchParams({
         grant_type:'refresh_token',
@@ -1662,7 +1608,7 @@ const manejarNuevo = (el, tipo) => {
       const text = await res.text();
       let payload; try { payload = JSON.parse(text); } catch { throw new Error('El archivo no es JSON.'); }
 
-      const data = (payload && payload.ct && payload.iv) ? await decryptBackup(payload) : payload;
+      const data = (payload &amp;&amp; payload.ct &amp;&amp; payload.iv) ? await decryptBackup(payload) : payload;
       if (!data || !data.datos) throw new Error('Formato de copia inválido');
 
       movimientos = Array.isArray(data.datos.movimientos) ? data.datos.movimientos : [];
@@ -1714,7 +1660,7 @@ const manejarNuevo = (el, tipo) => {
   }
   function scheduleSync(reason = 'changed') {
     try { clearTimeout(_syncTimer); } catch {}
-    _syncTimer = setTimeout(() => autoSyncToDropbox(reason), 1200);
+    _syncTimer = setTimeout(() =&gt; autoSyncToDropbox(reason), 1200);
   }
   async function loadFromDropboxOnStart({ silent = true } = {}) {
     try {
@@ -1734,7 +1680,7 @@ const manejarNuevo = (el, tipo) => {
       const text = await res.text();
       let payload; try { payload = JSON.parse(text); } catch { return; }
 
-      const data = (payload && payload.ct && payload.iv) ? await decryptBackup(payload) : payload;
+      const data = (payload &amp;&amp; payload.ct &amp;&amp; payload.iv) ? await decryptBackup(payload) : payload;
       if (!data || !data.datos) return;
 
       movimientos = Array.isArray(data.datos.movimientos) ? data.datos.movimientos : [];
@@ -1752,7 +1698,7 @@ const manejarNuevo = (el, tipo) => {
 
     } catch (e) { /* log */ }
   }
-  window.addEventListener('online', () => scheduleSync('online'));
+  window.addEventListener('online', () =&gt; scheduleSync('online'));
 
   // ==========================
   // EXPORTAR A GLOBAL (para HTML)
