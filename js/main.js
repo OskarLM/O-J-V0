@@ -335,6 +335,7 @@ if (window.__APP_LOADED__) {
       // Captura anclajes (left + center) y referencia de balance
       captureFooterAnchors();
       captureBalanceRef();
+  bindInfiniteScroll();
     }
     m.dataset.modo = modo; // "lista" | "graficos" | "graficos2" | "importexport"
     resetPagina(); mostrar();
@@ -1241,6 +1242,40 @@ const manejarNuevo = (el, tipo) => {
     actualizarListas();
     mostrar();
   };
+// ==========================
+// SCROLL INFINITO REAL (LISTA)
+// ==========================
+let _renderLock = false;
+
+function bindInfiniteScroll() {
+  const lista = document.getElementById("lista");
+  if (!lista || lista.__scrollBound) return;
+
+  lista.__scrollBound = true;
+
+  lista.addEventListener("scroll", () => {
+    const scrollBottom = lista.scrollTop + lista.clientHeight;
+    const contentHeight = lista.scrollHeight;
+
+    if (
+      scrollBottom >= contentHeight - 200 &&
+      registrosVisibles < filtradosGlobal.length
+    ) {
+      if (_renderLock) return;
+      _renderLock = true;
+
+      const loader = document.getElementById("loader");
+      if (loader) loader.style.display = "block";
+
+      setTimeout(() => {
+        registrosVisibles += 25;
+        mostrar();
+        _renderLock = false;
+      }, 200);
+    }
+  }, { passive: true });
+}
+
 
 let _renderLock = false;
 
