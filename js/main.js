@@ -648,6 +648,7 @@ if (window.__APP_LOADED__) {
 
       // Refrescar referencia del balance por si el CSS cambió
       captureBalanceRef();
+      bindInfiniteScroll();
     }
 
     ensureBackupIndicator(); updateBackupIndicator();
@@ -1241,19 +1242,42 @@ const manejarNuevo = (el, tipo) => {
     actualizarListas();
     mostrar();
   };
+  // ==========================
+// SCROLL INFINITO (LISTA REAL)
+// ==========================
+let _renderLock = false;
 
-  let _renderLock = false;
-  window.addEventListener('scroll', () => {
-    const movDiv = document.getElementById("movimientos");
-    if (!movDiv || movDiv.dataset.modo !== "lista") return;
-    if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 200 && registrosVisibles < filtradosGlobal.length) {
+function bindInfiniteScroll() {
+  const movDiv = document.getElementById("movimientos");
+  if (!movDiv || movDiv.__scrollBound) return;
+
+  // Marcamos que ya hemos puesto el listener
+  movDiv.__scrollBound = true;
+
+  movDiv.addEventListener('scroll', () => {
+    if (movDiv.dataset.modo !== "lista") return;
+
+    const scrollBottom = movDiv.scrollTop + movDiv.clientHeight;
+    const contentHeight = movDiv.scrollHeight;
+
+    if (
+      scrollBottom >= contentHeight - 200 &&
+      registrosVisibles < filtradosGlobal.length
+    ) {
       if (_renderLock) return;
       _renderLock = true;
+
       const loader = document.getElementById("loader");
       if (loader) loader.style.display = "block";
-      setTimeout(function(){ registrosVisibles += 25; mostrar(); _renderLock = false; }, 200);
+
+      setTimeout(() => {
+        registrosVisibles += 25;
+        mostrar();
+        _renderLock = false;
+      }, 200);
     }
   }, { passive: true });
+}
 
   // ==========================
   // CSV / BACKUPS / SW / DROPBOX / AUTOSYNC — Íntegro
