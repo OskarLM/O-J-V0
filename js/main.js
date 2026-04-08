@@ -1246,7 +1246,13 @@ const manejarNuevo = (el, tipo) => {
   window.addEventListener('scroll', () => {
     const movDiv = document.getElementById("movimientos");
     if (!movDiv || movDiv.dataset.modo !== "lista") return;
-    if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 200 && registrosVisibles < filtradosGlobal.length) {
+    if (
+(window.innerHeight + window.scrollY) >=
+  Math.max(
+    document.body.scrollHeight,
+    document.documentElement.scrollHeight
+  ) - 200
+ && registrosVisibles < filtradosGlobal.length) {
       if (_renderLock) return;
       _renderLock = true;
       const loader = document.getElementById("loader");
