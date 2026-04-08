@@ -1242,24 +1242,39 @@ const manejarNuevo = (el, tipo) => {
     mostrar();
   };
 
-  let _renderLock = false;
-  window.addEventListener('scroll', () => {
-    const movDiv = document.getElementById("movimientos");
-    if (!movDiv || movDiv.dataset.modo !== "lista") return;
+let _renderLock = false;
+
+const movDiv = document.getElementById("movimientos");
+
+if (movDiv && !movDiv.__scrollBound) {
+  movDiv.__scrollBound = true;
+
+  movDiv.addEventListener('scroll', () => {
+    if (movDiv.dataset.modo !== "lista") return;
+
+    const scrollBottom =
+      movDiv.scrollTop + movDiv.clientHeight;
+
+    const contentHeight = movDiv.scrollHeight;
+
     if (
-(window.innerHeight + window.scrollY) >=
-  Math.max(
-    document.body.scrollHeight,
-    document.documentElement.scrollHeight
-  ) - 200
- && registrosVisibles < filtradosGlobal.length) {
+      scrollBottom >= contentHeight - 200 &&
+      registrosVisibles < filtradosGlobal.length
+    ) {
       if (_renderLock) return;
       _renderLock = true;
+
       const loader = document.getElementById("loader");
       if (loader) loader.style.display = "block";
-      setTimeout(function(){ registrosVisibles += 25; mostrar(); _renderLock = false; }, 200);
+
+      setTimeout(() => {
+        registrosVisibles += 25;
+        mostrar();
+        _renderLock = false;
+      }, 200);
     }
   }, { passive: true });
+}
 
   // ==========================
   // CSV / BACKUPS / SW / DROPBOX / AUTOSYNC — Íntegro
