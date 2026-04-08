@@ -1276,15 +1276,10 @@ function bindInfiniteScroll() {
   }, { passive: true });
 }
 
-
-let _renderLock = false;
-
 const movDiv = document.getElementById("movimientos");
 
 if (movDiv && !movDiv.__scrollBound) {
   movDiv.__scrollBound = true;
-
-let _renderLock = false;
 
 function bindInfiniteScroll() {
   const lista = document.getElementById("lista");
