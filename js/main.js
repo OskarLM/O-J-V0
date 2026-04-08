@@ -624,36 +624,70 @@ if (window.__APP_LOADED__) {
         listaDiv.innerHTML = "";
         renderizarGraficos2();
       }
-    } else {
-      // LISTA
-      if (btnLeft){ btnLeft.innerHTML = iconBars(); btnLeft.classList.add("plus-like"); btnLeft.onclick = () => { captureBalanceRef(); setModo("graficos"); }; }
-      if (btnCenter){ btnCenter.innerHTML = "+"; btnCenter.onclick = () => abrirFormulario(); }
-
-      layoutFooterReset(btnLeft, btnCenter, btnRight);
-      layoutBalanceResetUnified();
-
-      if (listaDiv) {
-        const rows = filtradosGlobal
-          .slice(0, registrosVisibles)
-          .map(m => `
-            <div class='card' onclick="abrirFormulario('${m.id}')" style="border-left-color:${m.imp >= 0 ? 'var(--success)' : 'var(--danger)'}">
-              <div class="meta">${esc(m.f.split("-").reverse().join("/"))} • ${esc(m.o)}</div>
-              <b>${esc(m.c)} - ${esc(m.s)}</b>
-              ${m.d ? `<div style="font-size:12px;opacity:.8">${esc(m.d)}</div>` : ''}
-              <div class="monto" style="color:${m.imp >= 0 ? 'var(--success)' : 'var(--danger)'}">${(Number(m.imp)||0).toFixed(2)} €</div>
-            </div>`).join("");
-        listaDiv.innerHTML = rows;
-        const loader = document.getElementById("loader"); if (loader) loader.style.display = "none";
-      }
-
-      // Refrescar referencia del balance por si el CSS cambió
+} else {
+  // LISTA
+  if (btnLeft){
+    btnLeft.innerHTML = iconBars();
+    btnLeft.classList.add("plus-like");
+    btnLeft.onclick = () => {
       captureBalanceRef();
-      bindInfiniteScroll();
-    }
-
-    ensureBackupIndicator(); updateBackupIndicator();
+      setModo("graficos");
+    };
   }
 
+  if (btnCenter){
+    btnCenter.innerHTML = "+";
+    btnCenter.onclick = () => abrirFormulario();
+  }
+
+  layoutFooterReset(btnLeft, btnCenter, btnRight);
+  layoutBalanceResetUnified();
+
+  if (listaDiv) {
+    const rows = filtradosGlobal
+      .slice(0, registrosVisibles)
+      .map(m => `
+        <div class="card"
+          onclick="abrirFormulario('${m.id}')"
+          style="border-left-color:${m.imp >= 0 ? 'var(--success)' : 'var(--danger)'}">
+
+          <div class="meta">
+            ${esc(m.f.split("-").reverse().join("/"))} • ${esc(m.o)}
+          </div>
+
+          <b>${esc(m.c)} - ${esc(m.s)}</b>
+
+          ${
+            m.d
+              ? `<div style="font-size:12px;opacity:.8">${esc(m.d)}</div>`
+              : ""
+          }
+
+          <div class="monto"
+               style="color:${m.imp >= 0 ? 'var(--success)' : 'var(--danger)'}">
+            ${(Number(m.imp) || 0).toFixed(2)} €
+          </div>
+        </div>
+      `)
+      .join("");
+
+    listaDiv.innerHTML = rows;
+
+    const loader = document.getElementById("loader");
+    if (loader) loader.style.display = "none";
+
+    // ✅ AQUÍ, UNA SOLA VEZ
+    bindInfiniteScroll();
+  }
+
+  // Refrescar referencia del balance por si el CSS cambió
+  captureBalanceRef();
+}
+
+
+
+
+      
   // Reajustes al cambiar tamaño: re‑aplica layouts en gráficos (y balance unificado)
   window.addEventListener('resize', debounce(function(){
     const movDiv = document.getElementById("movimientos");
@@ -1254,6 +1288,9 @@ const resetPagina = () => {
   // ==========================
 // SCROLL INFINITO (LISTA REAL)
 // ==========================
+// ==========================
+// SCROLL INFINITO (LISTA REAL)
+// ==========================
 let _renderLock = false;
 
 function bindInfiniteScroll() {
@@ -1266,25 +1303,31 @@ function bindInfiniteScroll() {
     const scrollBottom = listaDiv.scrollTop + listaDiv.clientHeight;
     const contentHeight = listaDiv.scrollHeight;
 
-    if (
-      scrollBottom >= contentHeight - 200 &&
-      registrosVisibles < filtradosGlobal.length
+    // Si no estamos cerca del final, no hacemos nada
+    if (scrollBottom < contentHeight - 200) return;
+
+    // Si ya están todos los registros visibles, no hacemos nada
+    if (registrosVisibles >= filtradosGlobal.length) return;
+
+    if (_renderLock) return;
+    _renderLock = true;
+
+    const loader = document.getElementById("loader");
+    if (loader) loader.style.display = "block";
+
+    // ✅ CLAVE: cargar TODOS los bloques necesarios
+    while (
+      registrosVisibles < filtradosGlobal.length &&
+      (listaDiv.scrollTop + listaDiv.clientHeight) >= listaDiv.scrollHeight - 200
     ) {
-      if (_renderLock) return;
-      _renderLock = true;
-
-      const loader = document.getElementById("loader");
-      if (loader) loader.style.display = "block";
-
-      setTimeout(() => {
-        registrosVisibles += 25;
-        mostrar();
-        _renderLock = false;
-      }, 200);
+      registrosVisibles += 25;
     }
+
+    mostrar();
+
+    _renderLock = false;
   }, { passive: true });
 }
-
   // ==========================
   // CSV / BACKUPS / SW / DROPBOX / AUTOSYNC — Íntegro
   // ==========================
