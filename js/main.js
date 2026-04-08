@@ -335,7 +335,6 @@ if (window.__APP_LOADED__) {
       // Captura anclajes (left + center) y referencia de balance
       captureFooterAnchors();
       captureBalanceRef();
-  bindInfiniteScroll();
     }
     m.dataset.modo = modo; // "lista" | "graficos" | "graficos2" | "importexport"
     resetPagina(); mostrar();
@@ -1242,73 +1241,19 @@ const manejarNuevo = (el, tipo) => {
     actualizarListas();
     mostrar();
   };
-// ==========================
-// SCROLL INFINITO REAL (LISTA)
-// ==========================
-let _renderLock = false;
 
-function bindInfiniteScroll() {
-  const lista = document.getElementById("lista");
-  if (!lista || lista.__scrollBound) return;
-
-  lista.__scrollBound = true;
-
-  lista.addEventListener("scroll", () => {
-    const scrollBottom = lista.scrollTop + lista.clientHeight;
-    const contentHeight = lista.scrollHeight;
-
-    if (
-      scrollBottom >= contentHeight - 200 &&
-      registrosVisibles < filtradosGlobal.length
-    ) {
+  let _renderLock = false;
+  window.addEventListener('scroll', () => {
+    const movDiv = document.getElementById("movimientos");
+    if (!movDiv || movDiv.dataset.modo !== "lista") return;
+    if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 200 && registrosVisibles < filtradosGlobal.length) {
       if (_renderLock) return;
       _renderLock = true;
-
       const loader = document.getElementById("loader");
       if (loader) loader.style.display = "block";
-
-      setTimeout(() => {
-        registrosVisibles += 25;
-        mostrar();
-        _renderLock = false;
-      }, 200);
+      setTimeout(function(){ registrosVisibles += 25; mostrar(); _renderLock = false; }, 200);
     }
   }, { passive: true });
-}
-
-const movDiv = document.getElementById("movimientos");
-
-if (movDiv && !movDiv.__scrollBound) {
-  movDiv.__scrollBound = true;
-
-function bindInfiniteScroll() {
-  const lista = document.getElementById("lista");
-  if (!lista || lista.__scrollBound) return;
-
-  lista.__scrollBound = true;
-
-  lista.addEventListener("scroll", () => {
-    const scrollBottom = lista.scrollTop + lista.clientHeight;
-    const contentHeight = lista.scrollHeight;
-
-    if (
-      scrollBottom >= contentHeight - 200 &&
-      registrosVisibles < filtradosGlobal.length
-    ) {
-      if (_renderLock) return;
-      _renderLock = true;
-
-      const loader = document.getElementById("loader");
-      if (loader) loader.style.display = "block";
-
-      setTimeout(() => {
-        registrosVisibles += 25;
-        mostrar();
-        _renderLock = false;
-      }, 200);
-    }
-  }, { passive: true });
-}
 
   // ==========================
   // CSV / BACKUPS / SW / DROPBOX / AUTOSYNC — Íntegro
@@ -1451,224 +1396,273 @@ function bindInfiniteScroll() {
     reader.readAsText(file, 'UTF-8');
   };
 
-// ==========================
-// BACKUPS / INDICADOR / SW / DROPBOX / AUTOSYNC
-// ==========================
-async function createAndStoreLocalBackup(){
-  const enc = await encryptBackup(buildBackupObject());
-  const idx = ((parseInt(localStorage.getItem('backup_idx') || '0', 10)) % 5) + 1;
-  localStorage.setItem(`backup_${idx}`, JSON.stringify(enc));
-  localStorage.setItem('backup_idx', String(idx));
-  localStorage.setItem('backup_last_ts', String(Date.now()));
-  updateBackupIndicator();
-  return enc;
-}
-
-async function downloadEncryptedBackup(enc, filename='mis_gastos_backup.json'){
-  const blob = new Blob([JSON.stringify(enc, null, 2)], { type:'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-const ejecutarBackupRotativo = async () => {
-  try {
-    const enc = await createAndStoreLocalBackup();
-    await downloadEncryptedBackup(enc, 'mis_gastos_backup.json');
-  } catch(e){
-    console.error("Backup automático falló:", e);
+  // ==========================
+  // BACKUPS / INDICADOR / SW / DROPBOX / AUTOSYNC
+  // ==========================
+  async function createAndStoreLocalBackup(){
+    const enc = await encryptBackup(buildBackupObject());
+    const idx = ((parseInt(localStorage.getItem('backup_idx')||'0',10)) % 5) + 1;
+    localStorage.setItem(`backup_${idx}`, JSON.stringify(enc));
+    localStorage.setItem('backup_idx', String(idx));
+    localStorage.setItem('backup_last_ts', String(Date.now()));
+    updateBackupIndicator();
+    return enc;
   }
-};
-
-function ensureBackupIndicator(){
-  const top = document.querySelector('.topbar');
-  if (!top) return;
-  if (!document.getElementById('backupIndicator')){
-    const span = document.createElement('span');
-    span.id = 'backupIndicator';
-    span.className = 'backup-indicator';
-    span.innerHTML = `<span class="dot"></span><span class="txt">Última copia: —</span>`;
-    top.appendChild(span);
+  async function downloadEncryptedBackup(enc, filename='mis_gastos_backup.json'){
+    const blob=new Blob([JSON.stringify(enc,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
-}
-
-function humanAgo(ts){
-  if (!ts) return "—";
-  const diff = Date.now() - ts;
-  const s = Math.floor(diff/1000);
-  if (s < 60) return `hace ${s}s`;
-  const m = Math.floor(s/60);
-  if (m < 60) return `hace ${m}m`;
-  const h = Math.floor(m/60);
-  return `hace ${h}h`;
-}
-
-function updateBackupIndicator(){
-  const el = document.getElementById('backupIndicator');
-  if (!el) return;
-  const ts = parseInt(localStorage.getItem('backup_last_ts') || '0', 10);
-  el.querySelector('.txt').textContent = `Última copia: ${humanAgo(ts)}`;
-  el.classList.remove('stale','old');
-  if (!ts) el.classList.add('old');
-  else {
-    const mins = (Date.now() - ts) / 60000;
-    if (mins > 1440) el.classList.add('old');
-    else if (mins > 60) el.classList.add('stale');
-  }
-}
-
-setInterval(updateBackupIndicator, 60000);
-
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js')
-      .catch(err => console.error("SW ERROR:", err));
-  });
-}
-
-// ==========================
-// DROPBOX
-// ==========================
-const DBX_APP_KEY      = 'pow1k3kk53abk75';
-const DBX_REDIRECT_URI= 'https://oskarlm.github.io/APK_V0.0/auth/dropbox/callback';
-const DBX_FILE_PATH   = '/mis_gastos_backup.json';
-const DBX_OAUTH_AUTHORIZE = 'https://www.dropbox.com/oauth2/authorize';
-const DBX_OAUTH_TOKEN     = 'https://api.dropboxapi.com/oauth2/token';
-const DBX_CONTENT         = 'https://content.dropboxapi.com/2';
-
-function dbx_b64Url(bytes){
-  return btoa(String.fromCharCode(...new Uint8Array(bytes)))
-    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-}
-
-async function dbx_sha256Base64Url(text){
-  const data = new TextEncoder().encode(text);
-  const hash = await crypto.subtle.digest('SHA-256', data);
-  return dbx_b64Url(new Uint8Array(hash));
-}
-
-function dbx_randomString(len=64){
-  const arr = new Uint8Array(len);
-  crypto.getRandomValues(arr);
-  return Array.from(arr).map(b => ('0'+b.toString(16)).slice(-2)).join('');
-}
-
-function dbx_getTokens(){
-  try { return JSON.parse(localStorage.getItem('dbx_tokens') || '{}'); }
-  catch { return null; }
-}
-
-function dbx_setTokens(t){
-  localStorage.setItem('dbx_tokens', JSON.stringify(t || {}));
-}
-
-function dbx_clearTokens(){
-  localStorage.removeItem('dbx_tokens');
-}
-
-async function dropboxStartLogin(){
-  const code_verifier = dbx_randomString(64);
-  const code_challenge = await dbx_sha256Base64Url(code_verifier);
-  sessionStorage.setItem('dbx_code_verifier', code_verifier);
-  const params = new URLSearchParams({
-    response_type:'code',
-    client_id:DBX_APP_KEY,
-    redirect_uri:DBX_REDIRECT_URI,
-    code_challenge,
-    code_challenge_method:'S256',
-    token_access_type:'offline',
-    scope:'files.content.write files.content.read files.metadata.read'
-  });
-  window.location.href = `${DBX_OAUTH_AUTHORIZE}?${params.toString()}`;
-}
-
-async function dbx_getValidAccessToken(){
-  let t = dbx_getTokens();
-  if (!t) return null;
-  if (t.access_token && t.expires_at && Date.now() < t.expires_at) return t.access_token;
-  if (t.refresh_token){
-    const body = new URLSearchParams({
-      grant_type:'refresh_token',
-      client_id:DBX_APP_KEY,
-      refresh_token:t.refresh_token
-    });
-    const r = await fetch(DBX_OAUTH_TOKEN,{
-      method:'POST',
-      headers:{'Content-Type':'application/x-www-form-urlencoded'},
-      body
-    });
-    if (!r.ok){
-      dbx_clearTokens();
-      return null;
+  const ejecutarBackupRotativo = async () => {
+    try{
+      const enc=await createAndStoreLocalBackup();
+      await downloadEncryptedBackup(enc,'mis_gastos_backup.json');
+    } catch(e){
+      console.error("Backup automático falló:", e);
     }
-    const j = await r.json();
-    const expires_at = Date.now() + (j.expires_in ? j.expires_in*1000 : 3600*1000);
-    const saved = { ...t, access_token:j.access_token, expires_in:j.expires_in, expires_at };
-    dbx_setTokens(saved);
-    return saved.access_token;
+  };
+  function ensureBackupIndicator(){
+    const top=document.querySelector('.topbar'); if (!top) return;
+    if (!document.getElementById('backupIndicator')){
+      const span=document.createElement('span');
+      span.id='backupIndicator';
+      span.className='backup-indicator';
+      span.innerHTML=`<span class="dot"></span><span class="txt">Última copia: —</span>`;
+      top.appendChild(span);
+    }
   }
-  return t.access_token || null;
-}
+  function humanAgo(ts){
+    if (!ts) return "—";
+    const diff=Date.now()-ts, s=Math.floor(diff/1000);
+    if (s<60) return `hace ${s}s`;
+    const m=Math.floor(s/60); if (m<60) return `hace ${m}m`;
+    const h=Math.floor(m/60); return `hace ${h}h`;
+  }
+  function updateBackupIndicator(){
+    const el=document.getElementById('backupIndicator'); if (!el) return;
+    const ts=parseInt(localStorage.getItem('backup_last_ts')||'0',10);
+    el.querySelector('.txt').textContent=`Última copia: ${humanAgo(ts)}`;
+    el.classList.remove('stale','old');
+    if (!ts) el.classList.add('old');
+    else {
+      const mins=(Date.now()-ts)/60000;
+      if (mins>1440) el.classList.add('old');
+      else if (mins>60) el.classList.add('stale');
+    }
+  }
+  setInterval(updateBackupIndicator, 60000);
 
-// ==========================
-// DESCARGAR Y RESTAURAR
-// ==========================
-async function dropboxDownloadAndRestore(){
-  try {
-    let token = await dbx_getValidAccessToken();
-    if (!token) { await dropboxStartLogin(); return; }
-
-    const res = await fetch(`${DBX_CONTENT}/files/download`,{
-      method:'POST',
-      headers:{
-        'Authorization':`Bearer ${token}`,
-        'Dropbox-API-Arg':JSON.stringify({ path:DBX_FILE_PATH })
-      }
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('./sw.js').catch(function(err){
+        console.error("SW ERROR:", err);
+      });
     });
-
-    if (!res.ok) throw new Error(await res.text());
-    const text = await res.text();
-
-    let payload;
-    try { payload = JSON.parse(text); }
-    catch { throw new Error('El archivo no es JSON.'); }
-
-    const data = (payload && payload.ct && payload.iv)
-      ? await decryptBackup(payload)
-      : payload;
-
-    if (!data || !data.datos) throw new Error('Formato de copia inválido');
-
-    movimientos = Array.isArray(data.datos.movimientos)?data.datos.movimientos:[];
-    catExtra    = Array.isArray(data.datos.catExtra)?data.datos.catExtra:[];
-    subMaestra  = Array.isArray(data.datos.subMaestra)?data.datos.subMaestra:[];
-
-    localStorage.setItem('movimientos',JSON.stringify(movimientos));
-    localStorage.setItem('categoriaExtra',JSON.stringify(catExtra));
-    localStorage.setItem('subMaestra_v2',JSON.stringify(subMaestra));
-    localStorage.setItem('backup_last_ts',String(Date.now()));
-
-    updateBackupIndicator?.();
-    actualizarListas?.();
-    resetPagina?.();
-    mostrar?.();
-
-    alert('✅ Copia restaurada desde Dropbox.');
-  } catch(e){
-    console.error('Dropbox download error:', e);
-    alert(String(e?.message || e));
   }
-}
 
-function dropboxSignOut(){
-  dbx_clearTokens();
-  alert('Dropbox desconectado en este dispositivo.');
-}
+  const DBX_APP_KEY      = 'pow1k3kk53abk75';
+  const DBX_REDIRECT_URI = 'https://oskarlm.github.io/APK_V0.0/auth/dropbox/callback';
+  const DBX_FILE_PATH    = '/mis_gastos_backup.json';
+  const DBX_OAUTH_AUTHORIZE = 'https://www.dropbox.com/oauth2/authorize';
+  const DBX_OAUTH_TOKEN     = 'https://api.dropboxapi.com/oauth2/token';
+  const DBX_CONTENT         = 'https://content.dropboxapi.com/2';
+
+  function dbx_b64Url(bytes) {
+    return btoa(String.fromCharCode(...new Uint8Array(bytes)))
+      .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  }
+  async function dbx_sha256Base64Url(text) {
+    const data = new TextEncoder().encode(text);
+    const hash = await crypto.subtle.digest('SHA-256', data);
+    return dbx_b64Url(new Uint8Array(hash));
+  }
+  function dbx_randomString(len=64) {
+    const arr = new Uint8Array(len); crypto.getRandomValues(arr);
+    return Array.from(arr).map(b => ('0'+b.toString(16)).slice(-2)).join('');
+  }
+  function dbx_getTokens(){ try {return JSON.parse(localStorage.getItem('dbx_tokens')||'{}');} catch { return null; } }
+  function dbx_setTokens(t){ localStorage.setItem('dbx_tokens', JSON.stringify(t||{})); }
+  function dbx_clearTokens(){ localStorage.removeItem('dbx_tokens'); }
+
+  async function dropboxStartLogin(){
+    const code_verifier = dbx_randomString(64);
+    const code_challenge = await dbx_sha256Base64Url(code_verifier);
+    sessionStorage.setItem('dbx_code_verifier', code_verifier);
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: DBX_APP_KEY,
+      redirect_uri: DBX_REDIRECT_URI,
+      code_challenge: code_challenge,
+      code_challenge_method: 'S256',
+      token_access_type: 'offline',
+      scope: 'files.content.write files.content.read files.metadata.read'
+    });
+    window.location.href = `${DBX_OAUTH_AUTHORIZE}?${params.toString()}`;
+  }
+
+  async function dbx_getValidAccessToken(){
+    let t = dbx_getTokens(); if (!t) return null;
+    if (t.access_token && t.expires_at && Date.now() < t.expires_at) return t.access_token;
+    if (t.refresh_token) {
+      const body = new URLSearchParams({
+        grant_type:'refresh_token',
+        client_id:DBX_APP_KEY,
+        refresh_token:t.refresh_token
+      });
+      const r = await fetch(DBX_OAUTH_TOKEN, {
+        method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body
+      });
+      if (!r.ok) { dbx_clearTokens(); return null; }
+      const j = await r.json();
+      const expires_at = Date.now() + (j.expires_in ? j.expires_in*1000 : 3600*1000);
+      const saved = { ...t, access_token:j.access_token, expires_in:j.expires_in, expires_at };
+      dbx_setTokens(saved);
+      return saved.access_token;
+    }
+    return t.access_token || null;
+  }
+
+  async function dropboxUploadEncryptedBackup(){
+    try{
+      let token = await dbx_getValidAccessToken();
+      if (!token) { await dropboxStartLogin(); return; }
+
+      const enc = await encryptBackup(buildBackupObject());
+      const payload = JSON.stringify(enc, null, 2);
+
+      const res = await fetch(`${DBX_CONTENT}/files/upload`, {
+        method:'POST',
+        headers:{
+          'Authorization': `Bearer ${token}`,
+          'Dropbox-API-Arg': JSON.stringify({ path: DBX_FILE_PATH, mode: 'overwrite', autorename: false, mute: true }),
+          'Content-Type':'application/octet-stream'
+        },
+        body: new TextEncoder().encode(payload)
+      });
+
+      if (!res.ok) throw new Error(await res.text());
+      localStorage.setItem('backup_last_ts', String(Date.now()));
+      updateBackupIndicator?.();
+      alert('✅ Copia subida a Dropbox.');
+    }catch(e){
+      console.error('Dropbox upload error:', e);
+      alert(String(e?.message || e));
+    }
+  }
+
+  async function dropboxDownloadAndRestore(){
+    try{
+      let token = await dbx_getValidAccessToken();
+      if (!token) { await dropboxStartLogin(); return; }
+
+      const res = await fetch(`${DBX_CONTENT}/files/download`, {
+        method:'POST',
+        headers:{
+          'Authorization': `Bearer ${token}`,
+          'Dropbox-API-Arg': JSON.stringify({ path: DBX_FILE_PATH })
+        }
+      });
+
+      if (!res.ok) throw new Error(await res.text());
+      const text = await res.text();
+      let payload; try { payload = JSON.parse(text); } catch { throw new Error('El archivo no es JSON.'); }
+
+      const data = (payload && payload.ct && payload.iv) ? await decryptBackup(payload) : payload;
+      if (!data || !data.datos) throw new Error('Formato de copia inválido');
+
+      movimientos = Array.isArray(data.datos.movimientos) ? data.datos.movimientos : [];
+      catExtra    = Array.isArray(data.datos.catExtra) ? data.datos.catExtra : [];
+      subMaestra  = Array.isArray(data.datos.subMaestra) ? data.datos.subMaestra : [];
+
+      localStorage.setItem('movimientos', JSON.stringify(movimientos));
+      localStorage.setItem('categoriaExtra', JSON.stringify(catExtra));
+      localStorage.setItem('subMaestra_v2', JSON.stringify(subMaestra));
+      localStorage.setItem('backup_last_ts', String(Date.now()));
+
+      updateBackupIndicator?.();
+      actualizarListas?.(); resetPagina?.(); mostrar?.();
+
+      alert('✅ Copia restaurada desde Dropbox.');
+    }catch(e){
+      console.error('Dropbox download error:', e);
+      alert(String(e?.message || e));
+    }
+  }
+
+  function dropboxSignOut(){ dbx_clearTokens(); alert('Dropbox desconectado en este dispositivo.'); }
+
+  // Auto‑sync
+  let _syncTimer = null;
+  async function autoSyncToDropbox(reason = 'changed') {
+    try {
+      if (!navigator.onLine) return;
+      const token = await dbx_getValidAccessToken();
+      if (!token) { await dropboxStartLogin(); return; }
+
+      const enc = await encryptBackup(buildBackupObject());
+      const payload = JSON.stringify(enc, null, 2);
+
+      const res = await fetch(`${DBX_CONTENT}/files/upload`, {
+        method:'POST',
+        headers:{
+          'Authorization': `Bearer ${token}`,
+          'Dropbox-API-Arg': JSON.stringify({ path: DBX_FILE_PATH, mode: 'overwrite', autorename: false, mute: true }),
+          'Content-Type':'application/octet-stream'
+        },
+        body: new TextEncoder().encode(payload)
+      });
+
+      if (!res.ok) { /* log */ return; }
+      localStorage.setItem('backup_last_ts', String(Date.now()));
+      updateBackupIndicator?.();
+    } catch (e) { /* log */ }
+  }
+  function scheduleSync(reason = 'changed') {
+    try { clearTimeout(_syncTimer); } catch {}
+    _syncTimer = setTimeout(() => autoSyncToDropbox(reason), 1200);
+  }
+  async function loadFromDropboxOnStart({ silent = true } = {}) {
+    try {
+      if (!navigator.onLine) return;
+      const token = await dbx_getValidAccessToken();
+      if (!token) return;
+
+      const res = await fetch(`${DBX_CONTENT}/files/download`, {
+        method:'POST',
+        headers:{
+          'Authorization': `Bearer ${token}`,
+          'Dropbox-API-Arg': JSON.stringify({ path: DBX_FILE_PATH })
+        }
+      });
+
+      if (!res.ok) { return; }
+      const text = await res.text();
+      let payload; try { payload = JSON.parse(text); } catch { return; }
+
+      const data = (payload && payload.ct && payload.iv) ? await decryptBackup(payload) : payload;
+      if (!data || !data.datos) return;
+
+      movimientos = Array.isArray(data.datos.movimientos) ? data.datos.movimientos : [];
+      catExtra    = Array.isArray(data.datos.catExtra) ? data.datos.catExtra : [];
+      subMaestra  = Array.isArray(data.datos.subMaestra) ? data.datos.subMaestra : [];
+
+      localStorage.setItem('movimientos', JSON.stringify(movimientos));
+      localStorage.setItem('categoriaExtra', JSON.stringify(catExtra));
+      localStorage.setItem('subMaestra_v2', JSON.stringify(subMaestra));
+      localStorage.setItem('backup_last_ts', String(Date.now()));
+
+      updateBackupIndicator?.();
+      actualizarListas?.(); resetPagina?.(); mostrar?.();
+      if (!silent) alert('Datos cargados desde Dropbox.');
+
+    } catch (e) { /* log */ }
+  }
+  window.addEventListener('online', () => scheduleSync('online'));
+
   // ==========================
   // EXPORTAR A GLOBAL (para HTML)
   // ==========================
