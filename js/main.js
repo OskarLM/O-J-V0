@@ -1156,7 +1156,16 @@ const manejarNuevo = (el, tipo) => {
     mostrar();
   };
 
-  const resetPagina = () => { registrosVisibles = 25; window.scrollTo(0,0); };
+  
+const resetPagina = () => {
+  registrosVisibles = 25;
+
+  const lista = document.getElementById("lista");
+  if (lista) {
+    lista.scrollTop = 0;
+  }
+};
+
 
   const actualizarListas = () => {
     const fC = document.getElementById("filtroCat"),
