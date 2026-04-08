@@ -1249,13 +1249,17 @@ const movDiv = document.getElementById("movimientos");
 if (movDiv && !movDiv.__scrollBound) {
   movDiv.__scrollBound = true;
 
-  movDiv.addEventListener('scroll', () => {
-    if (movDiv.dataset.modo !== "lista") return;
+let _renderLock = false;
 
-    const scrollBottom =
-      movDiv.scrollTop + movDiv.clientHeight;
+function bindInfiniteScroll() {
+  const lista = document.getElementById("lista");
+  if (!lista || lista.__scrollBound) return;
 
-    const contentHeight = movDiv.scrollHeight;
+  lista.__scrollBound = true;
+
+  lista.addEventListener("scroll", () => {
+    const scrollBottom = lista.scrollTop + lista.clientHeight;
+    const contentHeight = lista.scrollHeight;
 
     if (
       scrollBottom >= contentHeight - 200 &&
