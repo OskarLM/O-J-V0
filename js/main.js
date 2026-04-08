@@ -1248,17 +1248,14 @@ const manejarNuevo = (el, tipo) => {
 let _renderLock = false;
 
 function bindInfiniteScroll() {
-  const movDiv = document.getElementById("movimientos");
-  if (!movDiv || movDiv.__scrollBound) return;
+  const listaDiv = document.getElementById("lista");
+  if (!listaDiv || listaDiv.__scrollBound) return;
 
-  // Marcamos que ya hemos puesto el listener
-  movDiv.__scrollBound = true;
+  listaDiv.__scrollBound = true;
 
-  movDiv.addEventListener('scroll', () => {
-    if (movDiv.dataset.modo !== "lista") return;
-
-    const scrollBottom = movDiv.scrollTop + movDiv.clientHeight;
-    const contentHeight = movDiv.scrollHeight;
+  listaDiv.addEventListener('scroll', () => {
+    const scrollBottom = listaDiv.scrollTop + listaDiv.clientHeight;
+    const contentHeight = listaDiv.scrollHeight;
 
     if (
       scrollBottom >= contentHeight - 200 &&
